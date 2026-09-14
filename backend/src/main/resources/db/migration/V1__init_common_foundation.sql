@@ -159,12 +159,31 @@ CREATE TABLE IF NOT EXISTS app_session (
 COMMENT ON TABLE app_session IS '로그인 세션 상태와 만료 시각을 관리한다.';
 COMMENT ON COLUMN app_session.status IS 'ACTIVE:활성|EXPIRED:만료|LOGGED_OUT:로그아웃';
 
+CREATE TABLE IF NOT EXISTS system_common_setting (
+  setting_key varchar(60) PRIMARY KEY,
+  setting_name varchar(150) NOT NULL,
+  setting_value varchar(60) NOT NULL,
+  value_unit varchar(20) NOT NULL CHECK (value_unit IN ('MINUTE','ROW','DAY','COUNT','SECOND')),
+  default_value varchar(60) NOT NULL,
+  min_value integer NOT NULL,
+  max_value integer NOT NULL,
+  description varchar(500) NOT NULL,
+  display_order integer NOT NULL DEFAULT 0,
+  use_yn char(1) NOT NULL DEFAULT 'Y' CHECK (use_yn IN ('Y','N')),
+  created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+COMMENT ON TABLE system_common_setting IS '시스템 전체에 공통 적용되는 세션·조회·검색기간·대량조회·장시간작업 안내 기준 환경설정 값을 관리한다.';
+COMMENT ON COLUMN system_common_setting.value_unit IS 'MINUTE:분|ROW:행|DAY:일|COUNT:건|SECOND:초';
+COMMENT ON COLUMN system_common_setting.use_yn IS 'Y:사용|N:미사용';
+
 CREATE INDEX IF NOT EXISTS idx_user_account_login_id ON user_account(login_id);
 CREATE INDEX IF NOT EXISTS idx_user_role_user_status ON user_role_assignment(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_menu_parent_order ON menu(parent_menu_id, display_order);
 CREATE INDEX IF NOT EXISTS idx_menu_permission_target ON menu_permission(target_type, target_id);
 CREATE INDEX IF NOT EXISTS idx_detail_code_group_order ON detail_code(group_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_session_user_status ON app_session(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_system_common_setting_order ON system_common_setting(display_order, setting_key);
 
 INSERT INTO organization (organization_code, organization_name, organization_type)
 SELECT v.organization_code, v.organization_name, v.organization_type
@@ -245,6 +264,7 @@ FROM (VALUES
   ('MENU-AUTH','MENU-SYS','역할·권한 관리',NULL,NULL,'shield','COMMON','역할과 권한 관리',2),
   ('MENU-MENU','MENU-SYS','메뉴 관리',NULL,NULL,'menu','COMMON','메뉴 관리',3),
   ('MENU-CODE','MENU-SYS','공통코드 관리',NULL,NULL,'code','COMMON','공통코드 관리',4),
+  ('MENU-COMMON-SETTINGS','MENU-SYS','공통 환경설정','UI-006','/admin/common-settings','settings','COMMON','공통 환경설정',5),
   ('MENU-USERS','MENU-USER-ORG','사용자 관리','SCR-CMN-USER','/admin/users','user','COMMON','사용자 관리',1),
   ('MENU-ORGS','MENU-USER-ORG','조직 관리','SCR-CMN-ORG','/admin/organizations','tree','COMMON','조직 관리',2),
   ('MENU-ROLES','MENU-AUTH','역할 관리','SCR-CMN-ROLE','/admin/roles','role','COMMON','역할 관리',1),
@@ -264,6 +284,19 @@ SELECT 'PERM-R09-' || m.menu_id, 'ROLE', 'R09', m.menu_id, 'Y'
 FROM menu m
 WHERE NOT EXISTS (
   SELECT 1 FROM menu_permission p WHERE p.target_type = 'ROLE' AND p.target_id = 'R09' AND p.menu_id = m.menu_id
+);
+
+INSERT INTO system_common_setting (setting_key, setting_name, setting_value, value_unit, default_value, min_value, max_value, description, display_order)
+SELECT v.setting_key, v.setting_name, v.setting_value, v.value_unit, v.default_value, v.min_value, v.max_value, v.description, v.display_order
+FROM (VALUES
+  ('SESSION_IDLE_MINUTES','세션 유휴시간','30','MINUTE','30',5,240,'사용자 활동이 없을 때 인증 세션을 유지하는 최대 분 단위 시간',1),
+  ('PAGE_SIZE','페이지당 조회건수','20','ROW','20',10,100,'목록 화면에서 한 페이지에 표시하는 기본 행 수',2),
+  ('DEFAULT_SEARCH_PERIOD_DAYS','기본 검색기간','30','DAY','30',1,365,'기간 검색 조건의 기본 일 단위 범위',3),
+  ('BULK_QUERY_THRESHOLD_COUNT','대량조회 기준건수','1000','COUNT','1000',100,10000,'대량 조회로 판단하는 결과 건수 기준',4),
+  ('LONG_TASK_NOTICE_SECONDS','장시간작업 안내 기준','10','SECOND','10',1,300,'처리가 길어질 때 사용자 안내를 표시하는 초 단위 기준',5)
+) AS v(setting_key, setting_name, setting_value, value_unit, default_value, min_value, max_value, description, display_order)
+WHERE NOT EXISTS (
+  SELECT 1 FROM system_common_setting s WHERE s.setting_key = v.setting_key
 );
 
 INSERT INTO code_group (group_id, group_name, description, managing_department)

@@ -1,7 +1,9 @@
 package kr.ac.knue.faculty.common.service;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -40,6 +42,29 @@ public class AdminService {
     public Map<String, Object> listUsers(int page, int size, String keyword, String filter) {
         Map<String, Object> p = params(page, size, keyword, filter);
         return page(mapper.listUsers(p), mapper.countUsers(p), page, size);
+    }
+
+    public Map<String, Object> listCommonSettings(int page, int size, String keyword, String filter) {
+        Map<String, Object> p = params(page, size, keyword, filter);
+        List<Map<String, Object>> items = new ArrayList<>();
+        for (Map<String, Object> item : mapper.listCommonSettings(p)) {
+            items.add(toCommonSettingContract(item));
+        }
+        return page(items, mapper.countCommonSettings(p), page, size);
+    }
+
+    @Transactional
+    public Map<String, Object> updateCommonSetting(String settingKey, Requests.CommonSettingRequest request) {
+        require(settingKey, "settingKey");
+        require(request.settingValue(), "settingValue");
+        String storageKey = commonSettingStorageKey(settingKey);
+        Map<String, Object> current = mapper.findCommonSetting(storageKey);
+        if (current == null) notFound("공통 환경설정");
+        validateCommonSettingValue(request.settingValue(), current);
+        if (mapper.updateCommonSetting(storageKey, request.settingValue()) == 0) notFound("공통 환경설정");
+        Map<String, Object> updated = mapper.findCommonSetting(storageKey);
+        if (updated == null) notFound("공통 환경설정");
+        return toCommonSettingContract(updated);
     }
 
     @Transactional
@@ -258,6 +283,44 @@ public class AdminService {
 
     private String value(String value, String fallback) { return value == null || value.isBlank() ? fallback : value; }
     private LocalDate parseNullableDate(String value) { return value == null || value.isBlank() ? null : LocalDate.parse(value); }
+    private Map<String, Object> toCommonSettingContract(Map<String, Object> row) {
+        Map<String, Object> data = new LinkedHashMap<>(row);
+        data.put("settingKey", commonSettingContractKey(String.valueOf(row.get("settingKey"))));
+        return data;
+    }
+    private String commonSettingStorageKey(String settingKey) {
+        return switch (settingKey) {
+            case "sessionIdleMinutes" -> "SESSION_IDLE_MINUTES";
+            case "pageSize" -> "PAGE_SIZE";
+            case "defaultSearchPeriodDays" -> "DEFAULT_SEARCH_PERIOD_DAYS";
+            case "bulkQueryThresholdCount" -> "BULK_QUERY_THRESHOLD_COUNT";
+            case "longRunningNoticeThresholdSeconds" -> "LONG_TASK_NOTICE_SECONDS";
+            default -> settingKey;
+        };
+    }
+    private String commonSettingContractKey(String settingKey) {
+        return switch (settingKey) {
+            case "SESSION_IDLE_MINUTES" -> "sessionIdleMinutes";
+            case "PAGE_SIZE" -> "pageSize";
+            case "DEFAULT_SEARCH_PERIOD_DAYS" -> "defaultSearchPeriodDays";
+            case "BULK_QUERY_THRESHOLD_COUNT" -> "bulkQueryThresholdCount";
+            case "LONG_TASK_NOTICE_SECONDS" -> "longRunningNoticeThresholdSeconds";
+            default -> settingKey;
+        };
+    }
+    private void validateCommonSettingValue(String settingValue, Map<String, Object> setting) {
+        int parsed;
+        try {
+            parsed = Integer.parseInt(settingValue.trim());
+        } catch (NumberFormatException ex) {
+            throw bad("settingValue는 " + setting.get("valueUnit") + " 단위의 정수여야 합니다.");
+        }
+        int min = ((Number) setting.get("minValue")).intValue();
+        int max = ((Number) setting.get("maxValue")).intValue();
+        if (parsed < min || parsed > max) {
+            throw bad("settingValue는 " + min + " 이상 " + max + " 이하이어야 합니다.");
+        }
+    }
     private void require(String value, String field) { if (value == null || value.isBlank()) throw bad(field + "는 필수입니다."); }
     private ApiException bad(String message) { return new ApiException(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", message); }
     private void notFound(String name) { throw new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", name + "을 찾을 수 없습니다."); }

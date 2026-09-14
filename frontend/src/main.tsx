@@ -67,6 +67,7 @@ type Screen = {
   supportsCreate?: boolean;
   supportsDelete?: boolean;
   supportsCancel?: boolean;
+  detailMode?: "side" | "modal";
 };
 
 const useYnOptions = ["Y", "N"];
@@ -136,6 +137,37 @@ export const screens: Screen[] = [
     ],
     emptyText: "조건에 맞는 사용자가 없습니다.",
     primaryAction: "접근 저장",
+    supportsCancel: true,
+  },
+  {
+    id: "UI-006",
+    title: "공통 환경설정",
+    description:
+      "세션 유휴시간, 페이지당 조회건수, 기본 검색기간, 대량조회 기준건수, 장시간작업 안내 기준을 전역 설정값으로 관리합니다.",
+    route: "/admin/common-settings",
+    menuPath: "시스템 관리 > 시스템 환경설정 > 공통 환경설정",
+    endpoint: "/api/admin/common-settings",
+    detailMode: "modal",
+    columns: [
+      { key: "settingKey", label: "설정키", tone: "id" },
+      { key: "settingName", label: "설정 항목" },
+      { key: "settingValue", label: "현재 값", tone: "status" },
+      { key: "valueUnit", label: "단위", tone: "status" },
+      { key: "description", label: "설명" },
+    ],
+    filters: [{ key: "keyword", label: "설정키·항목명" }],
+    formTitle: "환경설정 상세정보",
+    formFields: [
+      { key: "settingKey", label: "설정키", kind: "readonly" },
+      { key: "settingName", label: "설정 항목", kind: "readonly" },
+      { key: "description", label: "설명", kind: "readonly" },
+      { key: "valueUnit", label: "단위", kind: "readonly" },
+      { key: "minValue", label: "최소값", kind: "readonly" },
+      { key: "maxValue", label: "최대값", kind: "readonly" },
+      { key: "settingValue", label: "설정값", kind: "number", required: true },
+    ],
+    emptyText: "조회된 공통 환경설정이 없습니다.",
+    primaryAction: "설정값 저장",
     supportsCancel: true,
   },
   {
@@ -741,6 +773,7 @@ function AdminScreen({
   const [message, setMessage] = useState("조회 중입니다.");
   const [page, setPage] = useState<PageData | null>(null);
   const [dirtyPermissions, setDirtyPermissions] = useState<Row[] | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
 
   const endpoint = useMemo(
     () => buildEndpoint(screen, filters),
@@ -769,9 +802,11 @@ function AdminScreen({
       setItems(rows);
       setDirtyPermissions(null);
       setPage(pageData.items ? pageData : null);
-      const nextSelected = rows[0] ?? null;
+      const nextSelected =
+        screen.detailMode === "modal" ? null : (rows[0] ?? null);
       setSelected(nextSelected);
       setForm(rowToForm(screen, nextSelected, filters));
+      setModalOpen(false);
       setStatus(rows.length ? "success" : "empty");
       setMessage(
         rows.length ? `${rows.length}건을 조회했습니다.` : screen.emptyText,
@@ -791,6 +826,7 @@ function AdminScreen({
   function selectRow(row: Row) {
     setSelected(row);
     setForm(rowToForm(screen, row, filters));
+    if (screen.detailMode === "modal") setModalOpen(true);
   }
 
   function resetForm() {
@@ -812,6 +848,7 @@ function AdminScreen({
       );
       setStatus("success");
       setMessage("저장되었습니다. 같은 조건으로 목록을 재조회합니다.");
+      setModalOpen(false);
       await load();
     } catch (error) {
       const text =
@@ -996,96 +1033,199 @@ function AdminScreen({
           )}
         </div>
 
-        <div className="detail-stack">
-          {screen.readonlyFields && (
-            <div className="card readonly-card">
-              <h2>KORUS 원천정보</h2>
-              <p>직접 수정하지 않고 조회 전용으로 표시합니다.</p>
-              <div className="readonly-grid">
-                {screen.readonlyFields.map((field) => (
-                  <div key={field.key}>
-                    <span>{field.label}</span>
-                    <strong>{valueOf(selected, field.key) || "-"}</strong>
-                  </div>
+        {screen.detailMode !== "modal" && (
+          <div className="detail-stack">
+            {screen.readonlyFields && (
+              <div className="card readonly-card">
+                <h2>KORUS 원천정보</h2>
+                <p>직접 수정하지 않고 조회 전용으로 표시합니다.</p>
+                <div className="readonly-grid">
+                  {screen.readonlyFields.map((field) => (
+                    <div key={field.key}>
+                      <span>{field.label}</span>
+                      <strong>{valueOf(selected, field.key) || "-"}</strong>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="card detail">
+              <div className="card-header-row">
+                <div>
+                  <h2>{screen.formTitle}</h2>
+                  <p>
+                    {selected
+                      ? "선택 행을 편집합니다."
+                      : screen.supportsCreate
+                        ? "신규 데이터를 입력합니다."
+                        : "행을 선택하면 편집값이 채워집니다."}
+                  </p>
+                </div>
+                {selected && <span className="badge success">selected</span>}
+              </div>
+              <div className="form-grid">
+                {screen.formFields.map((field) => (
+                  <FieldControl
+                    key={field.key}
+                    field={{
+                      ...field,
+                      kind:
+                        field.readonlyOnEdit && selected
+                          ? "readonly"
+                          : field.kind,
+                    }}
+                    value={String(form[field.key] ?? "")}
+                    onChange={(value) =>
+                      setForm((prev) => ({ ...prev, [field.key]: value }))
+                    }
+                  />
                 ))}
               </div>
-            </div>
-          )}
-          <div className="card detail">
-            <div className="card-header-row">
-              <div>
-                <h2>{screen.formTitle}</h2>
-                <p>
-                  {selected
-                    ? "선택 행을 편집합니다."
-                    : screen.supportsCreate
-                      ? "신규 데이터를 입력합니다."
-                      : "행을 선택하면 편집값이 채워집니다."}
-                </p>
+              <div className="actions">
+                <button onClick={save} disabled={isPermission || isLoading}>
+                  {screen.primaryAction}
+                </button>
+                {screen.supportsDelete && Boolean(selected?.assignmentId) && (
+                  <button
+                    className="danger"
+                    onClick={revoke}
+                    disabled={isPermission || isLoading}
+                  >
+                    회수
+                  </button>
+                )}
+                {screen.supportsCancel && (
+                  <button
+                    className="secondary"
+                    onClick={() => {
+                      setForm(rowToForm(screen, selected, filters));
+                      setMessage("편집값을 초기화했습니다.");
+                    }}
+                  >
+                    취소
+                  </button>
+                )}
+                {screen.route === "/admin/code-groups" && (
+                  <button
+                    className="secondary"
+                    onClick={() =>
+                      selected?.groupId
+                        ? navigate(
+                            `/admin/detail-codes?groupId=${encodeURIComponent(String(selected.groupId))}`,
+                          )
+                        : setMessage(
+                            "상세코드 이동은 groupId 선택이 필요합니다.",
+                          )
+                    }
+                  >
+                    상세코드 이동
+                  </button>
+                )}
               </div>
-              {selected && <span className="badge success">selected</span>}
-            </div>
-            <div className="form-grid">
-              {screen.formFields.map((field) => (
-                <FieldControl
-                  key={field.key}
-                  field={{
-                    ...field,
-                    kind:
-                      field.readonlyOnEdit && selected
-                        ? "readonly"
-                        : field.kind,
-                  }}
-                  value={String(form[field.key] ?? "")}
-                  onChange={(value) =>
-                    setForm((prev) => ({ ...prev, [field.key]: value }))
-                  }
-                />
-              ))}
-            </div>
-            <div className="actions">
-              <button onClick={save} disabled={isPermission || isLoading}>
-                {screen.primaryAction}
-              </button>
-              {screen.supportsDelete && Boolean(selected?.assignmentId) && (
-                <button
-                  className="danger"
-                  onClick={revoke}
-                  disabled={isPermission || isLoading}
-                >
-                  회수
-                </button>
-              )}
-              {screen.supportsCancel && (
-                <button
-                  className="secondary"
-                  onClick={() => {
-                    setForm(rowToForm(screen, selected, filters));
-                    setMessage("편집값을 초기화했습니다.");
-                  }}
-                >
-                  취소
-                </button>
-              )}
-              {screen.route === "/admin/code-groups" && (
-                <button
-                  className="secondary"
-                  onClick={() =>
-                    selected?.groupId
-                      ? navigate(
-                          `/admin/detail-codes?groupId=${encodeURIComponent(String(selected.groupId))}`,
-                        )
-                      : setMessage("상세코드 이동은 groupId 선택이 필요합니다.")
-                  }
-                >
-                  상세코드 이동
-                </button>
-              )}
             </div>
           </div>
+        )}
+      </section>
+      {screen.detailMode === "modal" && modalOpen && (
+        <SettingModal
+          screen={screen}
+          selected={selected}
+          form={form}
+          setForm={setForm}
+          isLoading={isLoading}
+          isPermission={isPermission}
+          onCancel={() => {
+            setForm(rowToForm(screen, selected, filters));
+            setModalOpen(false);
+            setMessage("환경설정 상세 모달을 닫았습니다.");
+          }}
+          onSave={save}
+        />
+      )}
+    </main>
+  );
+}
+
+function SettingModal({
+  screen,
+  selected,
+  form,
+  setForm,
+  isLoading,
+  isPermission,
+  onCancel,
+  onSave,
+}: {
+  screen: Screen;
+  selected: Row | null;
+  form: Row;
+  setForm: React.Dispatch<React.SetStateAction<Row>>;
+  isLoading: boolean;
+  isPermission: boolean;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <div
+      className="modal-backdrop"
+      role="presentation"
+      data-testid="common-setting-modal-backdrop"
+    >
+      <section
+        className="modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="common-setting-modal-title"
+        data-testid="common-setting-detail-modal"
+      >
+        <div className="card-header-row">
+          <div>
+            <p className="eyebrow">UI-006-M1</p>
+            <h2 id="common-setting-modal-title">{screen.formTitle}</h2>
+            <p>
+              {selected
+                ? "선택한 공통 환경설정의 의미와 단위를 확인한 뒤 값만 수정합니다."
+                : "목록에서 환경설정 항목을 선택하세요."}
+            </p>
+          </div>
+          <button
+            className="secondary"
+            onClick={onCancel}
+            data-testid="common-setting-modal-close-button"
+          >
+            닫기
+          </button>
+        </div>
+        <div className="form-grid">
+          {screen.formFields.map((field) => (
+            <FieldControl
+              key={field.key}
+              field={field}
+              value={String(form[field.key] ?? "")}
+              onChange={(value) =>
+                setForm((prev) => ({ ...prev, [field.key]: value }))
+              }
+            />
+          ))}
+        </div>
+        <div className="actions">
+          <button
+            onClick={onSave}
+            disabled={isPermission || isLoading || !selected}
+            data-testid="common-setting-save-button"
+          >
+            {screen.primaryAction}
+          </button>
+          <button
+            className="secondary"
+            onClick={onCancel}
+            data-testid="common-setting-cancel-button"
+          >
+            취소
+          </button>
         </div>
       </section>
-    </main>
+    </div>
   );
 }
 
@@ -1294,6 +1434,14 @@ export async function saveScreen(
       body: JSON.stringify(body),
     });
   }
+  if (screen.route === "/admin/common-settings") {
+    const settingKey = selected?.settingKey ?? form.settingKey;
+    if (!settingKey) throw new Error("settingKey는 필수입니다.");
+    return api(`/api/admin/common-settings/${settingKey}`, {
+      method: "PATCH",
+      body: JSON.stringify({ settingValue: form.settingValue }),
+    });
+  }
   if (screen.route === "/admin/organizations") {
     const orgCode = selected?.orgCode ?? form.orgCode;
     if (!orgCode) throw new Error("orgCode는 필수입니다.");
@@ -1461,6 +1609,7 @@ function badgeTone(text: string) {
 
 function iconFor(route: string) {
   if (route.includes("users")) return "👥";
+  if (route.includes("settings")) return "⚙";
   if (route.includes("organizations")) return "▦";
   if (route.includes("role")) return "🛡";
   if (route.includes("permission")) return "🔐";

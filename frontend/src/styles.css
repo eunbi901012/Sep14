@@ -600,6 +600,28 @@ code {
   align-items: start;
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: rgba(15, 23, 42, 0.44);
+  backdrop-filter: blur(4px);
+}
+
+.modal-card {
+  width: min(760px, 100%);
+  max-height: calc(100vh - 3rem);
+  overflow: auto;
+  border: 1px solid rgba(217, 226, 239, 0.92);
+  border-radius: 20px;
+  background: var(--card);
+  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.24);
+  padding: 1.35rem;
+}
+
 .table-card {
   min-width: 0;
   padding: 0;
