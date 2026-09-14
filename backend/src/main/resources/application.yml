@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: faculty-evaluation-common
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://database:5432/faculty_eval}
+    username: ${SPRING_DATASOURCE_USERNAME:faculty_eval}
+    password: ${SPRING_DATASOURCE_PASSWORD:faculty_eval}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
+server:
+  port: 8080
