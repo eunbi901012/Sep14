@@ -56,6 +56,12 @@ class CommonContractApiTest {
     @Test
     void admin_read_flows_return_seeded_data_and_contract_fields() throws Exception {
         Cookie session = loginCookie();
+        mockMvc.perform(get("/api/admin/common-settings").cookie(session))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.items", hasSize(5)))
+            .andExpect(jsonPath("$.data.items[0].settingKey").exists())
+            .andExpect(jsonPath("$.data.items[0].settingValue").exists())
+            .andExpect(jsonPath("$.data.items[0].valueUnit").exists());
         mockMvc.perform(get("/api/admin/users").cookie(session))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.items[0].lastSyncedAt").exists());
@@ -91,6 +97,17 @@ class CommonContractApiTest {
     @Test
     void admin_write_flows_validate_and_persist_changes() throws Exception {
         Cookie session = loginCookie();
+
+        mockMvc.perform(patch("/api/admin/common-settings/sessionIdleMinutes").cookie(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"settingValue\":\"45\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.settingKey", is("sessionIdleMinutes")))
+            .andExpect(jsonPath("$.data.settingValue", is("45")));
+
+        mockMvc.perform(get("/api/admin/common-settings?keyword=SESSION_IDLE").cookie(session))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.items[0].settingValue", is("45")));
 
         mockMvc.perform(patch("/api/admin/users/U-F1001/system-access").cookie(session)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -132,6 +149,12 @@ class CommonContractApiTest {
     @Test
     void validation_errors_return_400_without_sensitive_leakage() throws Exception {
         Cookie session = loginCookie();
+        mockMvc.perform(patch("/api/admin/common-settings/pageSize").cookie(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"settingValue\":\"문자\"}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.success", is(false)));
+
         mockMvc.perform(post("/api/admin/code-groups").cookie(session)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"groupName\":\"식별자누락\"}"))

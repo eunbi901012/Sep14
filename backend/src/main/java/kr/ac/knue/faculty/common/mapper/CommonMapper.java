@@ -41,6 +41,18 @@ public interface CommonMapper {
     @Update("UPDATE user_account SET use_yn=#{systemUseYn}, business_role=#{businessRole}, updated_at=CURRENT_TIMESTAMP WHERE user_id=#{userId}")
     int updateUserAccess(@Param("userId") String userId, @Param("systemUseYn") String systemUseYn, @Param("businessRole") String businessRole);
 
+    @SelectProvider(type = SqlProvider.class, method = "listCommonSettings")
+    List<Map<String, Object>> listCommonSettings(Map<String, Object> params);
+
+    @SelectProvider(type = SqlProvider.class, method = "countCommonSettings")
+    long countCommonSettings(Map<String, Object> params);
+
+    @Select("SELECT setting_key as \"settingKey\", setting_name as \"settingName\", setting_value as \"settingValue\", value_unit as \"valueUnit\", default_value as \"defaultValue\", min_value as \"minValue\", max_value as \"maxValue\", description as \"description\", display_order as \"displayOrder\", use_yn as \"useYn\", updated_at as \"updatedAt\" FROM system_common_setting WHERE setting_key=#{settingKey}")
+    Map<String, Object> findCommonSetting(@Param("settingKey") String settingKey);
+
+    @Update("UPDATE system_common_setting SET setting_value=#{settingValue}, updated_at=CURRENT_TIMESTAMP WHERE setting_key=#{settingKey} AND use_yn='Y'")
+    int updateCommonSetting(@Param("settingKey") String settingKey, @Param("settingValue") String settingValue);
+
     @SelectProvider(type = SqlProvider.class, method = "listOrganizations")
     List<Map<String, Object>> listOrganizations(Map<String, Object> params);
 

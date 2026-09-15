@@ -143,4 +143,52 @@ describe("UI contract drift guards", () => {
       "/api/admin/menus?keyword=%EA%B6%8C%ED%95%9C&useYn=N",
     );
   });
+
+  it("adds common settings as UI-006 modal-backed screen using the relative API contract", () => {
+    const commonSettingScreen = screens.find(
+      (screen) => screen.route === "/admin/common-settings",
+    );
+
+    expect(commonSettingScreen).toMatchObject({
+      id: "UI-006",
+      title: "공통 환경설정",
+      endpoint: "/api/admin/common-settings",
+      detailMode: "modal",
+      primaryAction: "설정값 저장",
+    });
+    expect(commonSettingScreen?.columns.map((column) => column.key)).toEqual([
+      "settingKey",
+      "settingName",
+      "settingValue",
+      "valueUnit",
+      "description",
+    ]);
+  });
+
+  it("serializes common setting modal saves to PATCH /api/admin/common-settings/{settingKey}", async () => {
+    const commonSettingScreen = screens.find(
+      (screen) => screen.route === "/admin/common-settings",
+    );
+    if (!commonSettingScreen) throw new Error("common setting screen missing");
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, data: {}, meta: {} }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await saveScreen(
+      commonSettingScreen,
+      { settingKey: "PAGE_SIZE", settingValue: "20" },
+      { settingKey: "PAGE_SIZE", settingValue: "50", valueUnit: "ROW" },
+      {},
+      [],
+    );
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "/api/admin/common-settings/PAGE_SIZE",
+    );
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(String(init.body))).toEqual({ settingValue: "50" });
+  });
 });

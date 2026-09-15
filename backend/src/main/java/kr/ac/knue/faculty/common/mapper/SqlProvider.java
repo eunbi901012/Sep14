@@ -28,6 +28,19 @@ public class SqlProvider {
             keywordWhere(p, "lower(k.name) LIKE lower(concat('%', #{keyword}, '%')) OR lower(k.faculty_no) LIKE lower(concat('%', #{keyword}, '%')) OR lower(o.organization_name) LIKE lower(concat('%', #{keyword}, '%'))");
     }
 
+    public String listCommonSettings(Map<String, Object> p) {
+        return "SELECT setting_key as \"settingKey\", setting_name as \"settingName\", setting_value as \"settingValue\", value_unit as \"valueUnit\", " +
+            "default_value as \"defaultValue\", min_value as \"minValue\", max_value as \"maxValue\", description as \"description\", display_order as \"displayOrder\", updated_at as \"updatedAt\" " +
+            "FROM system_common_setting WHERE use_yn='Y'" +
+            keywordWhere(p, "lower(setting_key) LIKE lower(concat('%', #{keyword}, '%')) OR lower(setting_name) LIKE lower(concat('%', #{keyword}, '%')) OR lower(description) LIKE lower(concat('%', #{keyword}, '%'))") +
+            " ORDER BY display_order, setting_key LIMIT #{size} OFFSET #{offset}";
+    }
+
+    public String countCommonSettings(Map<String, Object> p) {
+        return "SELECT count(*) FROM system_common_setting WHERE use_yn='Y'" +
+            keywordWhere(p, "lower(setting_key) LIKE lower(concat('%', #{keyword}, '%')) OR lower(setting_name) LIKE lower(concat('%', #{keyword}, '%')) OR lower(description) LIKE lower(concat('%', #{keyword}, '%'))");
+    }
+
     public String listOrganizations(Map<String, Object> p) {
         return "SELECT o.organization_code as \"orgCode\", o.organization_name as \"orgName\", o.organization_type as \"orgType\", " +
             "h.parent_organization_code as \"parentOrgCode\", h.valid_from as \"effectiveStartDate\", h.valid_to as \"effectiveEndDate\" " +

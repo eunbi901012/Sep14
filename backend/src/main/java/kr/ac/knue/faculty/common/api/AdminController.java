@@ -39,6 +39,18 @@ public class AdminController {
         return ApiEnvelope.ok(adminService.updateUserAccess(userId, body));
     }
 
+    @GetMapping("/common-settings")
+    public ApiEnvelope<?> listCommonSettings(HttpServletRequest req, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size, @RequestParam(required = false) String keyword, @RequestParam(required = false) String filter) {
+        authService.requireAdmin(req);
+        return ApiEnvelope.ok(adminService.listCommonSettings(page, size, keyword, filter));
+    }
+
+    @PatchMapping("/common-settings/{settingKey}")
+    public ApiEnvelope<?> updateCommonSetting(HttpServletRequest req, @PathVariable String settingKey, @RequestBody Requests.CommonSettingRequest body) {
+        authService.requireAdmin(req);
+        return ApiEnvelope.ok(adminService.updateCommonSetting(settingKey, body));
+    }
+
     @GetMapping("/organizations")
     public ApiEnvelope<?> listOrganizations(HttpServletRequest req, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size, @RequestParam(required = false) String keyword, @RequestParam(required = false) String filter) {
         authService.requireAdmin(req);
