@@ -84,6 +84,12 @@ const roleOptions = [
 ];
 const targetTypeOptions = ["ROLE", "ORG", "USER"];
 const assignmentSourceOptions = ["MANUAL", "POSITION"];
+const batchTypeOptions = [
+  "EVALUATION_DATA",
+  "INTERFACE",
+  "SCORE_CALCULATION",
+  "SYSTEM",
+];
 
 export const screens: Screen[] = [
   {
@@ -496,6 +502,153 @@ export const screens: Screen[] = [
     supportsCreate: true,
     supportsCancel: true,
   },
+  {
+    id: "SCR-CMN-BATCH-DEF",
+    title: "배치 정의 관리",
+    description:
+      "배치ID, 업무유형, 실행주기, 선후행, 파라미터, 최대실행시간과 담당자를 관리합니다.",
+    route: "/admin/batch-definitions",
+    menuPath: "시스템 운영 관리 > 배치작업 관리 > 배치 정의 관리",
+    endpoint: "/api/admin/batch-definitions",
+    columns: [
+      { key: "batchId", label: "배치ID", tone: "id" },
+      { key: "batchType", label: "업무유형", tone: "status" },
+      { key: "schedule", label: "실행주기" },
+      { key: "predecessorBatchId", label: "선행배치", tone: "id" },
+      { key: "successorBatchId", label: "후행배치", tone: "id" },
+      { key: "maxExecutionSeconds", label: "최대실행시간", tone: "status" },
+      { key: "ownerUserId", label: "담당자", tone: "id" },
+    ],
+    filters: [{ key: "keyword", label: "배치ID·업무유형·담당자" }],
+    formTitle: "배치 정의 등록/수정",
+    formFields: [
+      { key: "batchId", label: "배치ID", required: true, readonlyOnEdit: true },
+      {
+        key: "batchType",
+        label: "업무유형",
+        kind: "select",
+        required: true,
+        options: batchTypeOptions,
+      },
+      { key: "schedule", label: "실행주기", required: true },
+      { key: "predecessorBatchId", label: "선행배치" },
+      { key: "successorBatchId", label: "후행배치" },
+      {
+        key: "executionParameters",
+        label: "실행 파라미터(JSON)",
+        kind: "textarea",
+      },
+      {
+        key: "maxExecutionSeconds",
+        label: "최대실행시간(초)",
+        kind: "number",
+        required: true,
+      },
+      { key: "ownerUserId", label: "담당자", required: true },
+    ],
+    emptyText: "조회된 배치 정의가 없습니다.",
+    primaryAction: "배치 정의 저장",
+    supportsCreate: true,
+    supportsCancel: true,
+  },
+  {
+    id: "SCR-CMN-BATCH-EXEC",
+    title: "배치 실행 관리",
+    description: "배치 실행 요청, 중지, 재실행 요청과 처리 상태를 추적합니다.",
+    route: "/admin/batch-executions",
+    menuPath: "시스템 운영 관리 > 배치작업 관리 > 배치 실행 관리",
+    endpoint: "/api/admin/batch-executions",
+    columns: [
+      { key: "executionId", label: "실행ID", tone: "id" },
+      { key: "batchId", label: "배치ID", tone: "id" },
+      { key: "batchType", label: "업무유형", tone: "status" },
+      { key: "actionType", label: "처리유형", tone: "status" },
+      { key: "executionStatus", label: "상태", tone: "status" },
+      { key: "operatorUserId", label: "조작자", tone: "id" },
+      { key: "createdAt", label: "요청일시", tone: "date" },
+    ],
+    filters: [{ key: "keyword", label: "실행ID·배치ID·상태" }],
+    formTitle: "실행/재실행 요청",
+    formFields: [
+      { key: "executionId", label: "실행ID", kind: "readonly" },
+      { key: "batchId", label: "배치ID", required: true },
+      {
+        key: "executionParameters",
+        label: "실행 파라미터(JSON)",
+        kind: "textarea",
+      },
+      {
+        key: "actionReason",
+        label: "처리 사유",
+        kind: "textarea",
+        required: true,
+      },
+    ],
+    emptyText: "조회된 배치 실행 이력이 없습니다.",
+    primaryAction: "실행 요청",
+    supportsCreate: true,
+    supportsDelete: true,
+    supportsCancel: true,
+  },
+  {
+    id: "SCR-CMN-BATCH-RESULT",
+    title: "배치 결과 조회",
+    description:
+      "배치 실행별 처리 건수, 소요시간, 로그 참조와 실패 대상을 확인합니다.",
+    route: "/admin/batch-results",
+    menuPath: "시스템 운영 관리 > 배치작업 관리 > 배치 결과 조회",
+    endpoint: "/api/admin/batch-results",
+    columns: [
+      { key: "executionId", label: "실행ID", tone: "id" },
+      { key: "batchId", label: "배치ID", tone: "id" },
+      { key: "totalCount", label: "총건수", tone: "status" },
+      { key: "successCount", label: "성공", tone: "status" },
+      { key: "failureCount", label: "실패", tone: "status" },
+      { key: "elapsedSeconds", label: "소요시간", tone: "status" },
+      { key: "logFileRef", label: "로그" },
+    ],
+    filters: [{ key: "keyword", label: "실행ID·배치ID" }],
+    formTitle: "결과 상세",
+    formFields: [
+      { key: "executionId", label: "실행ID", kind: "readonly" },
+      { key: "logFileRef", label: "로그 참조", kind: "readonly" },
+    ],
+    emptyText: "조회된 배치 결과가 없습니다.",
+    primaryAction: "로그 확인",
+    supportsCancel: true,
+  },
+  {
+    id: "SCR-CMN-BATCH-REPROCESS",
+    title: "배치 단건 재처리",
+    description:
+      "실패한 실행 대상 중 선택 건을 재처리 요청하고 재처리 결과를 확인합니다.",
+    route: "/admin/batch-reprocess",
+    menuPath: "시스템 운영 관리 > 배치작업 관리 > 배치 단건 재처리",
+    endpoint: "/api/admin/batch-reprocess-targets",
+    columns: [
+      { key: "executionId", label: "원본 실행ID", tone: "id" },
+      { key: "batchId", label: "배치ID", tone: "id" },
+      { key: "batchType", label: "업무유형", tone: "status" },
+      { key: "failureCount", label: "실패건수", tone: "status" },
+      { key: "logFileRef", label: "로그" },
+    ],
+    filters: [{ key: "keyword", label: "실행ID·배치ID" }],
+    formTitle: "단건 재처리 요청",
+    formFields: [
+      { key: "originalExecutionId", label: "원본 실행ID", required: true },
+      { key: "failedTargetId", label: "실패 대상ID", required: true },
+      {
+        key: "reprocessReason",
+        label: "재처리 사유",
+        kind: "textarea",
+        required: true,
+      },
+    ],
+    emptyText: "재처리 가능한 실패 대상이 없습니다.",
+    primaryAction: "재처리 요청",
+    supportsCreate: true,
+    supportsCancel: true,
+  },
 ];
 
 const screenByRoute = (route: string) =>
@@ -877,6 +1030,30 @@ function AdminScreen({
     }
   }
 
+  async function stopBatchExecution() {
+    if (!selected?.executionId) return;
+    setStatus("loading");
+    setMessage("배치 중지 요청을 처리 중입니다.");
+    try {
+      await api(`/api/admin/batch-executions/${selected.executionId}/stop`, {
+        method: "POST",
+        body: JSON.stringify({
+          actionReason: form.actionReason || "사용자 중지",
+        }),
+      });
+      setStatus("success");
+      setMessage("중지 요청이 처리되었습니다. 실행 목록을 재조회합니다.");
+      await load();
+    } catch (error) {
+      const text =
+        error instanceof Error
+          ? error.message
+          : "중지 요청 중 오류가 발생했습니다.";
+      setStatus(hasPermissionError(text) ? "permission" : "error");
+      setMessage(text);
+    }
+  }
+
   function updatePermission(row: Row, allowYn: string) {
     const source = dirtyPermissions ?? items;
     const next = source.map((item) =>
@@ -1094,6 +1271,16 @@ function AdminScreen({
                     회수
                   </button>
                 )}
+                {screen.route === "/admin/batch-executions" &&
+                  Boolean(selected?.executionId) && (
+                    <button
+                      className="danger"
+                      onClick={stopBatchExecution}
+                      disabled={isPermission || isLoading}
+                    >
+                      중지 요청
+                    </button>
+                  )}
                 {screen.supportsCancel && (
                   <button
                     className="secondary"
@@ -1396,6 +1583,12 @@ function emptyForm(screen: Screen, filters: Row): Row {
     )
   )
     base.useYn = "Y";
+  if (screen.route === "/admin/batch-definitions") {
+    base.batchType = "EVALUATION_DATA";
+    base.executionParameters = "{}";
+  }
+  if (screen.route === "/admin/batch-executions")
+    base.executionParameters = "{}";
   return base;
 }
 
@@ -1415,6 +1608,21 @@ export function rowToForm(screen: Screen, row: Row | null, filters: Row): Row {
       additionalAttributes: formatAdditionalAttributes(
         row.additionalAttributes,
       ),
+    };
+  if (
+    ["/admin/batch-definitions", "/admin/batch-executions"].includes(
+      screen.route,
+    )
+  )
+    return {
+      ...row,
+      executionParameters: formatAdditionalAttributes(row.executionParameters),
+    };
+  if (screen.route === "/admin/batch-reprocess")
+    return {
+      originalExecutionId: valueOf(row, "executionId"),
+      failedTargetId: "",
+      reprocessReason: "",
     };
   return { ...row };
 }
@@ -1556,6 +1764,38 @@ export async function saveScreen(
       body: JSON.stringify(normalizeDetailCodeBody(body)),
     });
   }
+  if (screen.route === "/admin/batch-definitions") {
+    const payload = normalizeBatchPayload(body);
+    const method = selected?.batchId ? "PUT" : "POST";
+    const path = selected?.batchId
+      ? `/api/admin/batch-definitions/${selected.batchId}`
+      : "/api/admin/batch-definitions";
+    return api(path, { method, body: JSON.stringify(payload) });
+  }
+  if (screen.route === "/admin/batch-executions") {
+    const payload = normalizeBatchPayload(body);
+    if (selected?.executionId) {
+      return api(`/api/admin/batch-executions/${selected.executionId}/rerun`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+    }
+    return api("/api/admin/batch-executions", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+  if (screen.route === "/admin/batch-results") {
+    const executionId = selected?.executionId ?? form.executionId;
+    if (!executionId) throw new Error("executionId는 필수입니다.");
+    return api(`/api/admin/batch-results/${executionId}/log`);
+  }
+  if (screen.route === "/admin/batch-reprocess") {
+    return api("/api/admin/batch-reprocess", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
 }
 
 function formatAdditionalAttributes(value: unknown): string {
@@ -1573,6 +1813,21 @@ function normalizeDetailCodeBody(body: Row): Row {
     const text = next.additionalAttributes.trim();
     if (text) next.additionalAttributes = JSON.parse(text) as Row;
     else delete next.additionalAttributes;
+  }
+  return next;
+}
+
+function normalizeBatchPayload(body: Row): Row {
+  const next = { ...body };
+  if (
+    typeof next.maxExecutionSeconds === "string" &&
+    next.maxExecutionSeconds.trim()
+  ) {
+    next.maxExecutionSeconds = Number(next.maxExecutionSeconds);
+  }
+  if (typeof next.executionParameters === "string") {
+    const text = next.executionParameters.trim();
+    next.executionParameters = text ? (JSON.parse(text) as Row) : {};
   }
   return next;
 }

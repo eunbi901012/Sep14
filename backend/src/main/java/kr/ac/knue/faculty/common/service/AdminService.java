@@ -1,6 +1,10 @@
 package kr.ac.knue.faculty.common.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletRequest;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -8,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import kr.ac.knue.faculty.common.api.ApiException;
+import kr.ac.knue.faculty.common.auth.AuthService;
 import kr.ac.knue.faculty.common.mapper.CommonMapper;
 import kr.ac.knue.faculty.common.model.Requests;
 import org.springframework.http.HttpStatus;
@@ -17,9 +22,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AdminService {
     private final CommonMapper mapper;
+    private final AuthService authService;
+    private final ObjectMapper objectMapper;
 
-    public AdminService(CommonMapper mapper) {
+    public AdminService(CommonMapper mapper, AuthService authService, ObjectMapper objectMapper) {
         this.mapper = mapper;
+        this.authService = authService;
+        this.objectMapper = objectMapper;
     }
 
     public Map<String, Object> page(List<Map<String, Object>> items, long total, int page, int size) {
@@ -261,6 +270,105 @@ public class AdminService {
         return detailCodeResponse(groupId, new Requests.DetailCodeRequest(codeValue, r.codeName(), r.parentCodeValue(), r.sortOrder(), r.additionalAttributes(), r.useYn()));
     }
 
+    public Map<String, Object> listBatchDefinitions(int page, int size, String keyword) {
+        Map<String, Object> p = params(page, size, keyword, null);
+        return page(mapper.listBatchDefinitions(p), mapper.countBatchDefinitions(p), page, size);
+    }
+
+    @Transactional
+    public Map<String, Object> createBatchDefinition(Requests.BatchDefinitionRequest r) {
+        validateBatchDefinition(r.batchId(), r.batchType(), r.schedule(), r.maxExecutionSeconds(), r.ownerUserId());
+        if (mapper.findBatchDefinition(r.batchId()) != null) throw bad("batchId가 이미 존재합니다.");
+        mapper.insertBatchDefinition(r.batchId(), r.batchType(), r.schedule(), r.predecessorBatchId(), r.successorBatchId(), json(r.executionParameters()), r.maxExecutionSeconds(), r.ownerUserId());
+        return mapper.findBatchDefinition(r.batchId());
+    }
+
+    @Transactional
+    public Map<String, Object> updateBatchDefinition(String batchId, Requests.BatchDefinitionRequest r) {
+        validateBatchDefinition(batchId, r.batchType(), r.schedule(), r.maxExecutionSeconds(), r.ownerUserId());
+        if (mapper.updateBatchDefinition(batchId, r.batchType(), r.schedule(), r.predecessorBatchId(), r.successorBatchId(), json(r.executionParameters()), r.maxExecutionSeconds(), r.ownerUserId()) == 0) notFound("배치 정의");
+        return mapper.findBatchDefinition(batchId);
+    }
+
+    public Map<String, Object> listBatchExecutions(int page, int size, String keyword) {
+        Map<String, Object> p = params(page, size, keyword, null);
+        return page(mapper.listBatchExecutions(p), mapper.countBatchExecutions(p), page, size);
+    }
+
+    @Transactional
+    public Map<String, Object> createBatchExecution(HttpServletRequest req, Requests.BatchExecutionRequest r) {
+        require(r.batchId(), "batchId");
+        require(r.actionReason(), "actionReason");
+        if (mapper.findBatchDefinition(r.batchId()) == null) notFound("배치 정의");
+        String executionId = nextId("EXEC");
+        mapper.insertBatchExecution(executionId, r.batchId(), json(r.executionParameters()), "START", r.actionReason(), currentUserId(req), "RUNNING", null);
+        mapper.insertBatchResult(executionId, null, 0, 0, 0, 0, null, "batch-log://" + executionId);
+        return mapper.findBatchExecution(executionId);
+    }
+
+    @Transactional
+    public Map<String, Object> stopBatchExecution(HttpServletRequest req, String executionId, Requests.BatchActionRequest r) {
+        require(executionId, "executionId");
+        require(r == null ? null : r.actionReason(), "actionReason");
+        Map<String, Object> current = mapper.findBatchExecution(executionId);
+        if (current == null) notFound("배치 실행");
+        if (!"RUNNING".equals(String.valueOf(current.get("executionStatus")))) {
+            throw bad("RUNNING 상태의 배치 실행만 중지할 수 있습니다.");
+        }
+        mapper.updateBatchExecutionStatus(executionId, "STOP", r.actionReason(), currentUserId(req), "STOPPED");
+        return mapper.findBatchExecution(executionId);
+    }
+
+    @Transactional
+    public Map<String, Object> rerunBatchExecution(HttpServletRequest req, String executionId, Requests.BatchActionRequest r) {
+        Map<String, Object> original = mapper.findBatchExecution(executionId);
+        if (original == null) notFound("배치 실행");
+        require(r == null ? null : r.actionReason(), "actionReason");
+        String nextExecutionId = nextId("RERUN");
+        String parameters = r == null || r.executionParameters() == null ? String.valueOf(original.get("executionParameters")) : json(r.executionParameters());
+        mapper.insertBatchExecution(nextExecutionId, String.valueOf(original.get("batchId")), parameters, "RERUN", r.actionReason(), currentUserId(req), "RERUN_REQUESTED", executionId);
+        mapper.insertBatchResult(nextExecutionId, null, 0, 0, 0, 0, null, "batch-log://" + nextExecutionId);
+        return mapper.findBatchExecution(nextExecutionId);
+    }
+
+    public Map<String, Object> listBatchResults(int page, int size, String keyword, String executionId) {
+        Map<String, Object> p = params(page, size, keyword, null);
+        p.put("executionId", executionId);
+        return page(mapper.listBatchResults(p), mapper.countBatchResults(p), page, size);
+    }
+
+    public Map<String, Object> getBatchResultLog(String executionId) {
+        require(executionId, "executionId");
+        Map<String, Object> log = mapper.findBatchResultLog(executionId);
+        if (log == null) notFound("배치 결과");
+        return log;
+    }
+
+    public Map<String, Object> listBatchReprocessTargets(int page, int size, String keyword) {
+        Map<String, Object> p = params(page, size, keyword, null);
+        return page(mapper.listBatchReprocessTargets(p), mapper.countBatchReprocessTargets(p), page, size);
+    }
+
+    @Transactional
+    public Map<String, Object> createBatchReprocess(HttpServletRequest req, Requests.BatchReprocessRequest r) {
+        require(r.originalExecutionId(), "originalExecutionId");
+        require(r.failedTargetId(), "failedTargetId");
+        require(r.reprocessReason(), "reprocessReason");
+        Map<String, Object> originalResult = mapper.findBatchResultSummary(r.originalExecutionId());
+        if (originalResult == null) notFound("원본 배치 결과");
+        if (((Number) originalResult.get("failureCount")).intValue() <= 0) throw bad("실패 대상이 있는 실행 결과만 재처리할 수 있습니다.");
+        String reprocessExecutionId = nextId("REPROC");
+        mapper.insertBatchExecution(reprocessExecutionId, String.valueOf(originalResult.get("batchId")), String.valueOf(originalResult.get("executionParameters")), "REPROCESS", r.reprocessReason(), currentUserId(req), "RERUN_REQUESTED", r.originalExecutionId());
+        mapper.insertBatchResult(reprocessExecutionId, null, 0, 0, 0, 0, null, "batch-log://" + reprocessExecutionId);
+        mapper.insertBatchReprocess(reprocessExecutionId, r.originalExecutionId(), r.failedTargetId(), r.reprocessReason(), "REQUESTED");
+        return Map.of("reprocessExecutionId", reprocessExecutionId, "originalExecutionId", r.originalExecutionId(), "failedTargetId", r.failedTargetId(), "reprocessResult", "REQUESTED");
+    }
+
+    public Map<String, Object> listBatchReprocessResults(int page, int size, String keyword) {
+        Map<String, Object> p = params(page, size, keyword, null);
+        return page(mapper.listBatchReprocessResults(p), mapper.countBatchReprocessResults(p), page, size);
+    }
+
     private Map<String, Object> userRoleResponse(String id, String userId, String roleCode, String source, String approverId, String from, String to) {
         Map<String, Object> data = new HashMap<>();
         data.put("assignmentId", id); data.put("userId", userId); data.put("roleCode", roleCode); data.put("assignmentSource", source); data.put("approverId", approverId); data.put("validFrom", from); data.put("validTo", to);
@@ -320,6 +428,26 @@ public class AdminService {
         if (parsed < min || parsed > max) {
             throw bad("settingValue는 " + min + " 이상 " + max + " 이하이어야 합니다.");
         }
+    }
+    private void validateBatchDefinition(String batchId, String batchType, String schedule, Integer maxExecutionSeconds, String ownerUserId) {
+        require(batchId, "batchId");
+        require(batchType, "batchType");
+        require(schedule, "schedule");
+        require(ownerUserId, "ownerUserId");
+        if (maxExecutionSeconds == null || maxExecutionSeconds <= 0) throw bad("maxExecutionSeconds는 1 이상이어야 합니다.");
+    }
+    private String currentUserId(HttpServletRequest req) {
+        return String.valueOf(authService.requireSession(req).get("userId"));
+    }
+    private String json(Map<String, Object> value) {
+        try {
+            return objectMapper.writeValueAsString(value == null ? Map.of() : value);
+        } catch (JsonProcessingException ex) {
+            throw bad("executionParameters는 JSON으로 변환할 수 있어야 합니다.");
+        }
+    }
+    private String nextId(String prefix) {
+        return prefix + "-" + UUID.randomUUID().toString().substring(0, 8);
     }
     private void require(String value, String field) { if (value == null || value.isBlank()) throw bad(field + "는 필수입니다."); }
     private ApiException bad(String message) { return new ApiException(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", message); }

@@ -4,5 +4,6 @@ dist
 build
 coverage
 .git
+target
 *.log
 *.local

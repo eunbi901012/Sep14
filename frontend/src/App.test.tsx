@@ -191,4 +191,52 @@ describe("UI contract drift guards", () => {
     expect(init.method).toBe("PATCH");
     expect(JSON.parse(String(init.body))).toEqual({ settingValue: "50" });
   });
+
+  it("adds batch operation screens using relative admin API routes", () => {
+    expect(
+      screens
+        .filter((screen) => screen.route.includes("/admin/batch"))
+        .map((screen) => [screen.route, screen.endpoint]),
+    ).toEqual([
+      ["/admin/batch-definitions", "/api/admin/batch-definitions"],
+      ["/admin/batch-executions", "/api/admin/batch-executions"],
+      ["/admin/batch-results", "/api/admin/batch-results"],
+      ["/admin/batch-reprocess", "/api/admin/batch-reprocess-targets"],
+    ]);
+  });
+
+  it("serializes batch definition saves with parsed JSON parameters and numeric timeout", async () => {
+    const batchScreen = screens.find(
+      (screen) => screen.route === "/admin/batch-definitions",
+    );
+    if (!batchScreen) throw new Error("batch definition screen missing");
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, data: {}, meta: {} }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await saveScreen(
+      batchScreen,
+      null,
+      {
+        batchId: "BATCH-TEST",
+        batchType: "SYSTEM",
+        schedule: "0 4 * * *",
+        executionParameters: '{"mode":"TEST"}',
+        maxExecutionSeconds: "600",
+        ownerUserId: "U-ADMIN",
+      },
+      {},
+      [],
+    );
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/admin/batch-definitions");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      executionParameters: { mode: "TEST" },
+      maxExecutionSeconds: 600,
+    });
+  });
 });

@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import jakarta.servlet.http.Cookie;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -160,6 +161,74 @@ class CommonContractApiTest {
                 .content("{\"groupName\":\"식별자누락\"}"))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.message").exists());
+    }
+
+    @Test
+    void batch_definition_execution_result_and_reprocess_flows_follow_contract() throws Exception {
+        Cookie session = loginCookie();
+        String batchId = "BATCH-TEST-" + UUID.randomUUID().toString().substring(0, 8);
+
+        mockMvc.perform(get("/api/admin/batch-definitions").cookie(session))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.items[0].batchId").exists())
+            .andExpect(jsonPath("$.data.items[0].maxExecutionSeconds").exists());
+
+        mockMvc.perform(post("/api/admin/batch-definitions").cookie(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"batchId\":\"" + batchId + "\",\"batchType\":\"SYSTEM\",\"schedule\":\"0 4 * * *\",\"executionParameters\":{\"mode\":\"TEST\"},\"maxExecutionSeconds\":600,\"ownerUserId\":\"U-ADMIN\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.batchId", is(batchId)));
+
+        MvcResult execution = mockMvc.perform(post("/api/admin/batch-executions").cookie(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"batchId\":\"" + batchId + "\",\"executionParameters\":{\"mode\":\"ONCE\"},\"actionReason\":\"계약 테스트\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.batchId", is(batchId)))
+            .andReturn();
+        String executionId = com.jayway.jsonpath.JsonPath.read(execution.getResponse().getContentAsString(), "$.data.executionId");
+
+        mockMvc.perform(post("/api/admin/batch-executions/" + executionId + "/stop").cookie(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"actionReason\":\"사용자 중지\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.executionStatus", is("STOPPED")));
+
+        mockMvc.perform(post("/api/admin/batch-executions/" + executionId + "/rerun").cookie(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"executionParameters\":{\"mode\":\"RERUN\"},\"actionReason\":\"재실행\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.originalExecutionId", is(executionId)));
+
+        mockMvc.perform(get("/api/admin/batch-results/EXEC-SEED-FAILED/log").cookie(session))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.logFileRef", is("batch-log://EXEC-SEED-FAILED")));
+
+        mockMvc.perform(get("/api/admin/batch-reprocess-targets").cookie(session))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.items[0].failureCount", is(5)));
+
+        mockMvc.perform(post("/api/admin/batch-reprocess").cookie(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"originalExecutionId\":\"EXEC-SEED-FAILED\",\"failedTargetId\":\"TARGET-1\",\"reprocessReason\":\"오류 보정 후 재처리\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.reprocessResult", is("REQUESTED")));
+    }
+
+    @Test
+    void batch_write_validation_and_not_found_cases_return_safe_errors() throws Exception {
+        Cookie session = loginCookie();
+
+        mockMvc.perform(post("/api/admin/batch-definitions").cookie(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"batchType\":\"SYSTEM\",\"schedule\":\"0 4 * * *\",\"maxExecutionSeconds\":600,\"ownerUserId\":\"U-ADMIN\"}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.success", is(false)));
+
+        mockMvc.perform(post("/api/admin/batch-executions").cookie(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"batchId\":\"UNKNOWN\",\"actionReason\":\"존재하지 않는 배치 실행\"}"))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.success", is(false)));
     }
 
     private Cookie loginCookie() throws Exception {
