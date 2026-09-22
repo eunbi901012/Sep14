@@ -92,4 +92,59 @@ public class SqlProvider {
     public String countCodeGroups(Map<String, Object> p) {
         return "SELECT count(*) FROM code_group WHERE 1=1" + keywordWhere(p, "lower(group_id) LIKE lower(concat('%', #{keyword}, '%')) OR lower(group_name) LIKE lower(concat('%', #{keyword}, '%')) OR lower(coalesce(managing_department,'')) LIKE lower(concat('%', #{keyword}, '%'))");
     }
+
+    public String listBatchDefinitions(Map<String, Object> p) {
+        return "SELECT b.batch_id as \"batchId\", b.batch_type as \"batchType\", b.schedule as \"schedule\", b.predecessor_batch_id as \"predecessorBatchId\", b.successor_batch_id as \"successorBatchId\", b.execution_parameters as \"executionParameters\", b.max_execution_seconds as \"maxExecutionSeconds\", b.owner_user_id as \"ownerUserId\", u.display_name as \"ownerName\", b.created_at as \"createdAt\", b.updated_at as \"updatedAt\" FROM batch_definition b LEFT JOIN user_account u ON u.user_id=b.owner_user_id WHERE 1=1" +
+            keywordWhere(p, "lower(b.batch_id) LIKE lower(concat('%', #{keyword}, '%')) OR lower(b.batch_type) LIKE lower(concat('%', #{keyword}, '%')) OR lower(b.schedule) LIKE lower(concat('%', #{keyword}, '%')) OR lower(coalesce(u.display_name,'')) LIKE lower(concat('%', #{keyword}, '%'))") +
+            " ORDER BY b.batch_id LIMIT #{size} OFFSET #{offset}";
+    }
+
+    public String countBatchDefinitions(Map<String, Object> p) {
+        return "SELECT count(*) FROM batch_definition b LEFT JOIN user_account u ON u.user_id=b.owner_user_id WHERE 1=1" + keywordWhere(p, "lower(b.batch_id) LIKE lower(concat('%', #{keyword}, '%')) OR lower(b.batch_type) LIKE lower(concat('%', #{keyword}, '%')) OR lower(b.schedule) LIKE lower(concat('%', #{keyword}, '%')) OR lower(coalesce(u.display_name,'')) LIKE lower(concat('%', #{keyword}, '%'))");
+    }
+
+    public String listBatchExecutions(Map<String, Object> p) {
+        return "SELECT e.execution_id as \"executionId\", e.batch_id as \"batchId\", d.batch_type as \"batchType\", e.execution_parameters as \"executionParameters\", e.action_type as \"actionType\", e.action_reason as \"actionReason\", e.operator_user_id as \"operatorUserId\", u.display_name as \"operatorName\", e.execution_status as \"executionStatus\", e.original_execution_id as \"originalExecutionId\", e.created_at as \"createdAt\", e.updated_at as \"updatedAt\" FROM batch_execution e JOIN batch_definition d ON d.batch_id=e.batch_id LEFT JOIN user_account u ON u.user_id=e.operator_user_id WHERE 1=1" +
+            keywordWhere(p, "lower(e.execution_id) LIKE lower(concat('%', #{keyword}, '%')) OR lower(e.batch_id) LIKE lower(concat('%', #{keyword}, '%')) OR lower(d.batch_type) LIKE lower(concat('%', #{keyword}, '%')) OR lower(e.execution_status) LIKE lower(concat('%', #{keyword}, '%'))") +
+            " ORDER BY e.created_at DESC, e.execution_id DESC LIMIT #{size} OFFSET #{offset}";
+    }
+
+    public String countBatchExecutions(Map<String, Object> p) {
+        return "SELECT count(*) FROM batch_execution e JOIN batch_definition d ON d.batch_id=e.batch_id WHERE 1=1" + keywordWhere(p, "lower(e.execution_id) LIKE lower(concat('%', #{keyword}, '%')) OR lower(e.batch_id) LIKE lower(concat('%', #{keyword}, '%')) OR lower(d.batch_type) LIKE lower(concat('%', #{keyword}, '%')) OR lower(e.execution_status) LIKE lower(concat('%', #{keyword}, '%'))");
+    }
+
+    public String listBatchResults(Map<String, Object> p) {
+        return "SELECT r.execution_id as \"executionId\", e.batch_id as \"batchId\", d.batch_type as \"batchType\", r.started_at as \"startedAt\", r.ended_at as \"endedAt\", r.total_count as \"totalCount\", r.success_count as \"successCount\", r.failure_count as \"failureCount\", r.excluded_count as \"excludedCount\", r.elapsed_seconds as \"elapsedSeconds\", r.log_file_ref as \"logFileRef\" FROM batch_result r JOIN batch_execution e ON e.execution_id=r.execution_id JOIN batch_definition d ON d.batch_id=e.batch_id WHERE 1=1" +
+            executionIdWhere(p) + keywordWhere(p, "lower(r.execution_id) LIKE lower(concat('%', #{keyword}, '%')) OR lower(e.batch_id) LIKE lower(concat('%', #{keyword}, '%')) OR lower(d.batch_type) LIKE lower(concat('%', #{keyword}, '%'))") +
+            " ORDER BY r.started_at DESC, r.execution_id DESC LIMIT #{size} OFFSET #{offset}";
+    }
+
+    public String countBatchResults(Map<String, Object> p) {
+        return "SELECT count(*) FROM batch_result r JOIN batch_execution e ON e.execution_id=r.execution_id JOIN batch_definition d ON d.batch_id=e.batch_id WHERE 1=1" + executionIdWhere(p) + keywordWhere(p, "lower(r.execution_id) LIKE lower(concat('%', #{keyword}, '%')) OR lower(e.batch_id) LIKE lower(concat('%', #{keyword}, '%')) OR lower(d.batch_type) LIKE lower(concat('%', #{keyword}, '%'))");
+    }
+
+    public String listBatchReprocessTargets(Map<String, Object> p) {
+        return "SELECT r.execution_id as \"executionId\", e.batch_id as \"batchId\", d.batch_type as \"batchType\", r.failure_count as \"failureCount\", r.log_file_ref as \"logFileRef\", r.started_at as \"startedAt\", r.ended_at as \"endedAt\" FROM batch_result r JOIN batch_execution e ON e.execution_id=r.execution_id JOIN batch_definition d ON d.batch_id=e.batch_id WHERE r.failure_count > 0" +
+            keywordWhere(p, "lower(r.execution_id) LIKE lower(concat('%', #{keyword}, '%')) OR lower(e.batch_id) LIKE lower(concat('%', #{keyword}, '%')) OR lower(d.batch_type) LIKE lower(concat('%', #{keyword}, '%')) OR lower(coalesce(r.log_file_ref,'')) LIKE lower(concat('%', #{keyword}, '%'))") +
+            " ORDER BY r.started_at DESC, r.execution_id DESC LIMIT #{size} OFFSET #{offset}";
+    }
+
+    public String countBatchReprocessTargets(Map<String, Object> p) {
+        return "SELECT count(*) FROM batch_result r JOIN batch_execution e ON e.execution_id=r.execution_id JOIN batch_definition d ON d.batch_id=e.batch_id WHERE r.failure_count > 0" + keywordWhere(p, "lower(r.execution_id) LIKE lower(concat('%', #{keyword}, '%')) OR lower(e.batch_id) LIKE lower(concat('%', #{keyword}, '%')) OR lower(d.batch_type) LIKE lower(concat('%', #{keyword}, '%')) OR lower(coalesce(r.log_file_ref,'')) LIKE lower(concat('%', #{keyword}, '%'))");
+    }
+
+    public String listBatchReprocessResults(Map<String, Object> p) {
+        return "SELECT rp.reprocess_execution_id as \"reprocessExecutionId\", rp.original_execution_id as \"originalExecutionId\", rp.failed_target_id as \"failedTargetId\", rp.reprocess_reason as \"reprocessReason\", rp.reprocess_result as \"reprocessResult\", rp.created_at as \"createdAt\" FROM batch_reprocess rp WHERE 1=1" +
+            keywordWhere(p, "lower(rp.reprocess_execution_id) LIKE lower(concat('%', #{keyword}, '%')) OR lower(rp.original_execution_id) LIKE lower(concat('%', #{keyword}, '%')) OR lower(rp.failed_target_id) LIKE lower(concat('%', #{keyword}, '%')) OR lower(rp.reprocess_result) LIKE lower(concat('%', #{keyword}, '%'))") +
+            " ORDER BY rp.created_at DESC, rp.reprocess_execution_id DESC LIMIT #{size} OFFSET #{offset}";
+    }
+
+    public String countBatchReprocessResults(Map<String, Object> p) {
+        return "SELECT count(*) FROM batch_reprocess rp WHERE 1=1" + keywordWhere(p, "lower(rp.reprocess_execution_id) LIKE lower(concat('%', #{keyword}, '%')) OR lower(rp.original_execution_id) LIKE lower(concat('%', #{keyword}, '%')) OR lower(rp.failed_target_id) LIKE lower(concat('%', #{keyword}, '%')) OR lower(rp.reprocess_result) LIKE lower(concat('%', #{keyword}, '%'))");
+    }
+
+    private String executionIdWhere(Map<String, Object> p) {
+        if (!has(p, "executionId")) return "";
+        return " AND r.execution_id = #{executionId}";
+    }
 }

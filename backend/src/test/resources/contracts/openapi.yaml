@@ -2792,6 +2792,200 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
+  /api/admin/batch-definitions:
+    get:
+      operationId: listBatchDefinitions
+      summary: 배치 정의 목록 조회
+      x-related-requirements: [REQ-098, REQ-107]
+      security:
+        - cookieAuth: []
+      x-roles: [R09]
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
+        - $ref: '#/components/parameters/KeywordParam'
+      responses:
+        '200': { description: 정상 응답, content: { application/json: { schema: { allOf: [ { $ref: '#/components/schemas/ApiResponse' }, { type: object, required: [data], properties: { data: { type: object, required: [items, page, size, totalElements], properties: { items: { type: array, items: { type: object, required: [batchId, batchType, schedule, ownerUserId], properties: { batchId: { type: string }, batchType: { type: string }, schedule: { type: string }, predecessorBatchId: { type: string, nullable: true }, successorBatchId: { type: string, nullable: true }, maxExecutionSeconds: { type: integer, nullable: true }, ownerUserId: { type: string } } } }, page: { type: integer }, size: { type: integer }, totalElements: { type: integer } } } } } ] } } } }
+        '400': { description: 요청 오류, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '401': { description: 미인증, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '403': { description: 권한 없음, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+    post:
+      operationId: createBatchDefinition
+      summary: 배치 정의 등록
+      x-related-requirements: [REQ-099, REQ-100, REQ-101, REQ-102, REQ-103, REQ-104, REQ-105]
+      security: [{ cookieAuth: [] }]
+      x-roles: [R09]
+      x-business-rules: ['REQ-114: 배치는 배치ID를 기준으로 선후행 관계를 관리한다.', 'REQ-115: 배치는 배치ID를 기준으로 실행조건을 관리한다.']
+      x-side-effects: ['batch_definition 행을 생성하고 후속 listBatchDefinitions에서 표시한다.']
+      x-state-transitions: ['none -> defined']
+      x-required-tests: ['happy: R09가 batchId와 실행주기를 저장 -> batch_definition.batch_id가 생성되고 후속 조회에 표시된다', 'auth: non-R09 저장 요청 -> 401/403 ApiError와 batch_definition 미생성', 'validation: batchId 누락 -> 400 field error와 저장 없음', 'business: 다른 배치 정의의 실행주기 변경 시도 -> 요청 batch_id 외 행은 유지', 'side-effect: 저장 완료 -> batch_definition.created_at/updated_at 기록이 조회된다']
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [batchId, batchType, schedule, ownerUserId]
+              properties: { batchId: { type: string }, batchType: { type: string }, schedule: { type: string }, predecessorBatchId: { type: string, nullable: true }, successorBatchId: { type: string, nullable: true }, executionParameters: { type: object, additionalProperties: true }, maxExecutionSeconds: { type: integer, nullable: true }, ownerUserId: { type: string } }
+      responses:
+        '200': { description: 정상 응답, content: { application/json: { schema: { allOf: [ { $ref: '#/components/schemas/ApiResponse' }, { type: object, required: [data], properties: { data: { type: object, required: [batchId], properties: { batchId: { type: string } } } } } ] } } } }
+        '400': { description: 요청 오류, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '401': { description: 미인증, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '403': { description: 권한 없음, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+  /api/admin/batch-definitions/{batchId}:
+    put:
+      operationId: updateBatchDefinition
+      summary: 배치 정의 수정
+      x-related-requirements: [REQ-099, REQ-100, REQ-101, REQ-102, REQ-103, REQ-104, REQ-105]
+      security: [{ cookieAuth: [] }]
+      x-roles: [R09]
+      x-business-rules: ['REQ-121: 실행주기 변경이 다른 배치 정의를 임의로 변경하지 않는다.', 'REQ-122: 실행 파라미터 변경이 다른 배치 정의를 임의로 변경하지 않는다.']
+      x-side-effects: ['batch_definition 행을 갱신하고 후속 listBatchDefinitions에서 표시한다.']
+      x-state-transitions: ['defined -> defined_updated']
+      x-required-tests: ['happy: R09가 기존 batchId 실행주기를 수정 -> batch_definition.schedule 변경값이 후속 조회된다', 'auth: non-R09 수정 요청 -> 401/403 ApiError와 기존 schedule 유지', 'validation: schedule 누락 -> 400 field error와 기존 행 유지', 'business: path batchId 외 정의 변경 요청 -> 다른 batch_definition 행 유지', 'side-effect: 수정 완료 -> batch_definition.updated_at 갱신']
+      parameters: [{ name: batchId, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [batchType, schedule, ownerUserId], properties: { batchType: { type: string }, schedule: { type: string }, predecessorBatchId: { type: string, nullable: true }, successorBatchId: { type: string, nullable: true }, executionParameters: { type: object, additionalProperties: true }, maxExecutionSeconds: { type: integer, nullable: true }, ownerUserId: { type: string } } } } }
+      responses:
+        '200': { description: 정상 응답, content: { application/json: { schema: { allOf: [ { $ref: '#/components/schemas/ApiResponse' }, { type: object, required: [data], properties: { data: { type: object, required: [batchId], properties: { batchId: { type: string } } } } } ] } } } }
+        '400': { description: 요청 오류, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '401': { description: 미인증, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '403': { description: 권한 없음, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+  /api/admin/batch-executions:
+    get:
+      operationId: listBatchExecutions
+      summary: 배치 실행상태 조회
+      x-related-requirements: [REQ-127]
+      security: [{ cookieAuth: [] }]
+      x-roles: [R09]
+      parameters: [{ $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/SizeParam' }, { $ref: '#/components/parameters/KeywordParam' }]
+      responses:
+        '200': { description: 정상 응답, content: { application/json: { schema: { allOf: [ { $ref: '#/components/schemas/ApiResponse' }, { type: object, required: [data], properties: { data: { type: object, required: [items, page, size, totalElements], properties: { items: { type: array, items: { type: object, additionalProperties: true } }, page: { type: integer }, size: { type: integer }, totalElements: { type: integer } } } } } ] } } } }
+        '400': { description: 요청 오류, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '401': { description: 미인증, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '403': { description: 권한 없음, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+    post:
+      operationId: createBatchExecution
+      summary: 배치 수동실행
+      x-related-requirements: [REQ-128, REQ-131, REQ-132, REQ-133, REQ-134, REQ-135, REQ-136, REQ-137, REQ-138, REQ-150, REQ-151, REQ-152]
+      security: [{ cookieAuth: [] }]
+      x-roles: [R09]
+      x-business-rules: ['REQ-145: 수동실행은 권한 있는 운영자에게만 허용한다.', 'REQ-148: 수동실행·중지·재실행은 파라미터와 사유를 기록한다.']
+      x-side-effects: ['batch_execution 행을 생성하고 실행상태를 RUNNING으로 기록한다.']
+      x-state-transitions: ['WAITING -> RUNNING']
+      x-required-tests: ['happy: R09가 batchId와 reason으로 수동실행 -> batch_execution.execution_status가 RUNNING으로 조회된다', 'auth: non-R09 수동실행 -> 401/403 ApiError와 batch_execution 미생성', 'validation: reason 누락 -> 400 field error와 실행 없음', 'business: 존재하지 않는 batchId 실행 -> 400/404 ApiError와 실행 없음', 'side-effect: 실행 성공 -> batch_execution.operator_user_id와 action_reason 기록']
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [batchId, actionReason], properties: { batchId: { type: string }, executionParameters: { type: object, additionalProperties: true }, actionReason: { type: string } } } } } }
+      responses:
+        '200': { description: 정상 응답, content: { application/json: { schema: { allOf: [ { $ref: '#/components/schemas/ApiResponse' }, { type: object, required: [data], properties: { data: { type: object, required: [executionId, executionStatus], properties: { executionId: { type: string }, executionStatus: { type: string } } } } } ] } } } }
+        '400': { description: 요청 오류, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '401': { description: 미인증, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '403': { description: 권한 없음, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+  /api/admin/batch-executions/{executionId}/stop:
+    post:
+      operationId: stopBatchExecution
+      summary: 배치 중지
+      x-related-requirements: [REQ-129, REQ-146, REQ-148]
+      security: [{ cookieAuth: [] }]
+      x-roles: [R09]
+      x-business-rules: ['REQ-146: 중지는 권한 있는 운영자에게만 허용한다.']
+      x-side-effects: ['batch_execution.action_type=STOP과 사유를 기록하고 상태를 STOPPED로 변경한다.']
+      x-state-transitions: ['RUNNING -> STOPPED']
+      x-required-tests: ['happy: R09가 실행중 executionId 중지 -> batch_execution.execution_status가 STOPPED로 조회된다', 'auth: non-R09 중지 -> 401/403 ApiError와 RUNNING 유지', 'validation: actionReason 누락 -> 400 field error와 상태 유지', 'business: 완료 상태 중지 요청 -> 400 ApiError와 완료 상태 유지', 'side-effect: 중지 성공 -> action_type STOP과 reason 기록']
+      parameters: [{ name: executionId, in: path, required: true, schema: { type: string } }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [actionReason], properties: { actionReason: { type: string } } } } } }
+      responses:
+        '200': { description: 정상 응답, content: { application/json: { schema: { allOf: [ { $ref: '#/components/schemas/ApiResponse' }, { type: object, required: [data], properties: { data: { type: object, required: [executionId, executionStatus], properties: { executionId: { type: string }, executionStatus: { type: string } } } } } ] } } } }
+        '400': { description: 요청 오류, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '401': { description: 미인증, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '403': { description: 권한 없음, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+  /api/admin/batch-executions/{executionId}/rerun:
+    post:
+      operationId: rerunBatchExecution
+      summary: 배치 재실행
+      x-related-requirements: [REQ-130, REQ-147, REQ-153]
+      security: [{ cookieAuth: [] }]
+      x-roles: [R09]
+      x-business-rules: ['REQ-153: 재실행은 원실행을 식별할 수 있게 연결한다.']
+      x-side-effects: ['새 batch_execution 행을 생성하고 original_execution_id를 기록한다.']
+      x-state-transitions: ['COMPLETED/FAILED -> RERUN_REQUESTED']
+      x-required-tests: ['happy: R09가 원실행 재실행 -> 새 execution_id가 original_execution_id와 연결된다', 'auth: non-R09 재실행 -> 401/403 ApiError와 신규 실행 없음', 'validation: actionReason 누락 -> 400 field error와 신규 실행 없음', 'business: 원실행ID 없음 -> 404 ApiError와 신규 실행 없음', 'side-effect: 재실행 성공 -> batch_execution.original_execution_id 기록']
+      parameters: [{ name: executionId, in: path, required: true, schema: { type: string } }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [actionReason], properties: { executionParameters: { type: object, additionalProperties: true }, actionReason: { type: string } } } } } }
+      responses:
+        '200': { description: 정상 응답, content: { application/json: { schema: { allOf: [ { $ref: '#/components/schemas/ApiResponse' }, { type: object, required: [data], properties: { data: { type: object, required: [executionId, originalExecutionId], properties: { executionId: { type: string }, originalExecutionId: { type: string } } } } } ] } } } }
+        '400': { description: 요청 오류, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '401': { description: 미인증, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '403': { description: 권한 없음, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+  /api/admin/batch-results:
+    get:
+      operationId: listBatchResults
+      summary: 배치 결과 조회
+      x-related-requirements: [REQ-154, REQ-155, REQ-156, REQ-157, REQ-158, REQ-159, REQ-160, REQ-161, REQ-162]
+      security: [{ cookieAuth: [] }]
+      x-roles: [R09]
+      parameters: [{ $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/SizeParam' }, { $ref: '#/components/parameters/KeywordParam' }, { name: executionId, in: query, required: false, schema: { type: string } }]
+      responses:
+        '200': { description: 정상 응답, content: { application/json: { schema: { allOf: [ { $ref: '#/components/schemas/ApiResponse' }, { type: object, required: [data], properties: { data: { type: object, required: [items, page, size, totalElements], properties: { items: { type: array, items: { type: object, additionalProperties: true } }, page: { type: integer }, size: { type: integer }, totalElements: { type: integer } } } } } ] } } } }
+        '400': { description: 요청 오류, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '401': { description: 미인증, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '403': { description: 권한 없음, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+  /api/admin/batch-results/{executionId}/log:
+    get:
+      operationId: getBatchResultLog
+      summary: 배치 로그 조회
+      x-related-requirements: [REQ-163, REQ-176, REQ-177]
+      security: [{ cookieAuth: [] }]
+      x-roles: [R09]
+      parameters: [{ name: executionId, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: 로그파일, content: { application/json: { schema: { allOf: [ { $ref: '#/components/schemas/ApiResponse' }, { type: object, required: [data], properties: { data: { type: object, required: [executionId, logFileRef], properties: { executionId: { type: string }, logFileRef: { type: string } } } } } ] } } } }
+        '400': { description: 요청 오류, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '401': { description: 미인증, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '403': { description: 권한 없음, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+  /api/admin/batch-reprocess-targets:
+    get:
+      operationId: listBatchReprocessTargets
+      summary: 재처리 대상 조회
+      x-related-requirements: [REQ-181, REQ-182, REQ-193, REQ-202]
+      security: [{ cookieAuth: [] }]
+      x-roles: [R09]
+      parameters: [{ $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/SizeParam' }, { $ref: '#/components/parameters/KeywordParam' }]
+      responses:
+        '200': { description: 정상 응답, content: { application/json: { schema: { allOf: [ { $ref: '#/components/schemas/ApiResponse' }, { type: object, required: [data], properties: { data: { type: object, required: [items, page, size, totalElements], properties: { items: { type: array, items: { type: object, additionalProperties: true } }, page: { type: integer }, size: { type: integer }, totalElements: { type: integer } } } } } ] } } } }
+        '400': { description: 요청 오류, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '401': { description: 미인증, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '403': { description: 권한 없음, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+  /api/admin/batch-reprocess:
+    post:
+      operationId: createBatchReprocess
+      summary: 배치 오류 재처리
+      x-related-requirements: [REQ-183, REQ-184, REQ-186, REQ-187, REQ-188, REQ-193, REQ-194, REQ-197, REQ-198, REQ-204, REQ-207]
+      security: [{ cookieAuth: [] }]
+      x-roles: [R09]
+      x-business-rules: ['REQ-193: 재처리는 실패 대상만 선택해야 한다.', 'REQ-204: 재처리 사유가 없으면 재실행할 수 없다.', 'REQ-197: 재처리 결과는 원실행 결과를 덮어쓰지 않고 별도 결과로 보존한다.']
+      x-side-effects: ['batch_reprocess 행과 별도 재처리 execution 결과를 생성한다.']
+      x-state-transitions: ['FAILED_TARGET -> REPROCESS_REQUESTED']
+      x-required-tests: ['happy: R09가 실패대상과 사유로 재처리 -> batch_reprocess.reprocess_execution_id가 원실행ID와 조회된다', 'auth: non-R09 재처리 -> 401/403 ApiError와 batch_reprocess 미생성', 'validation: reprocessReason 누락 -> 400 field error와 재처리 없음', 'business: 실패 대상이 아닌 target 요청 -> 400 ApiError와 원실행 결과 유지', 'side-effect: 재처리 성공 -> 원실행 batch_result는 유지되고 별도 batch_reprocess 행 생성']
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [originalExecutionId, failedTargetId, reprocessReason], properties: { originalExecutionId: { type: string }, failedTargetId: { type: string }, reprocessReason: { type: string } } } } } }
+      responses:
+        '200': { description: 정상 응답, content: { application/json: { schema: { allOf: [ { $ref: '#/components/schemas/ApiResponse' }, { type: object, required: [data], properties: { data: { type: object, required: [originalExecutionId, reprocessExecutionId], properties: { originalExecutionId: { type: string }, reprocessExecutionId: { type: string } } } } } ] } } } }
+        '400': { description: 요청 오류, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '401': { description: 미인증, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '403': { description: 권한 없음, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+  /api/admin/batch-reprocess-results:
+    get:
+      operationId: listBatchReprocessResults
+      summary: 재처리 결과 조회
+      x-related-requirements: [REQ-185, REQ-188, REQ-199]
+      security: [{ cookieAuth: [] }]
+      x-roles: [R09]
+      parameters: [{ $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/SizeParam' }, { $ref: '#/components/parameters/KeywordParam' }]
+      responses:
+        '200': { description: 정상 응답, content: { application/json: { schema: { allOf: [ { $ref: '#/components/schemas/ApiResponse' }, { type: object, required: [data], properties: { data: { type: object, required: [items, page, size, totalElements], properties: { items: { type: array, items: { type: object, additionalProperties: true } }, page: { type: integer }, size: { type: integer }, totalElements: { type: integer } } } } } ] } } } }
+        '400': { description: 요청 오류, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '401': { description: 미인증, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '403': { description: 권한 없음, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
   /api/health:
     get:
       operationId: health
@@ -2926,6 +3120,15 @@ components:
         - ORG
         - USER
 x-uncovered-requirements:
+  - canonical_id: REQ-059
+    status: screen-only
+    evidence: 목록 Excel 다운로드는 UI export action과 frontend file generation 검증에서 소유하며 신규 HTTP download operation은 source에서 확정하지 않는다.
+  - canonical_id: REQ-125
+    status: non-functional
+    evidence: 최대실행시간 초과 처리는 확인 필요 정책으로 API 상태값을 임의 확정하지 않는다.
+  - canonical_id: REQ-126
+    status: non-functional
+    evidence: 선행 배치 실패 시 후행 처리 정책은 확인 필요 정책으로 API가 자동 실행 여부를 단정하지 않는다.
   - canonical_id: REQ-053
     status: screen-only
     evidence: 환경설정 상세 모달 표시는 UI-006/UI-006-M1 화면 계약에서 소유하고 별도 HTTP operation으로 노출하지 않는다.

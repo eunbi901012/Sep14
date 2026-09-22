@@ -159,12 +159,80 @@ CREATE TABLE IF NOT EXISTS app_session (
 COMMENT ON TABLE app_session IS '로그인 세션 상태와 만료 시각을 관리한다.';
 COMMENT ON COLUMN app_session.status IS 'ACTIVE:활성|EXPIRED:만료|LOGGED_OUT:로그아웃';
 
+CREATE TABLE IF NOT EXISTS batch_definition (
+  batch_id varchar(80) PRIMARY KEY,
+  batch_type varchar(80) NOT NULL,
+  schedule varchar(120) NOT NULL,
+  predecessor_batch_id varchar(80),
+  successor_batch_id varchar(80),
+  execution_parameters text NOT NULL DEFAULT '{}',
+  max_execution_seconds integer NOT NULL CHECK (max_execution_seconds > 0),
+  owner_user_id varchar(40) NOT NULL REFERENCES user_account(user_id),
+  created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+COMMENT ON TABLE batch_definition IS '평가자료 생성·연계·점수산출 배치의 배치ID, 실행주기, 선후행, 파라미터, 최대실행시간과 담당자를 관리한다.';
+COMMENT ON COLUMN batch_definition.batch_type IS 'EVALUATION_DATA:평가자료|INTERFACE:연계|SCORE_CALCULATION:점수산출|SYSTEM:시스템';
+COMMENT ON COLUMN batch_definition.predecessor_batch_id IS 'batch_definition.batch_id 참조 의도 (FK 미선언: 선후행 순환 검증은 애플리케이션에서 수행)';
+COMMENT ON COLUMN batch_definition.successor_batch_id IS 'batch_definition.batch_id 참조 의도 (FK 미선언: 선후행 순환 검증은 애플리케이션에서 수행)';
+COMMENT ON COLUMN batch_definition.execution_parameters IS 'AdminService.create/updateBatchDefinition 시 애플리케이션에서 JSON 문자열로 갱신';
+
+CREATE TABLE IF NOT EXISTS batch_execution (
+  execution_id varchar(80) PRIMARY KEY,
+  batch_id varchar(80) NOT NULL REFERENCES batch_definition(batch_id),
+  execution_parameters text NOT NULL DEFAULT '{}',
+  action_type varchar(20) NOT NULL CHECK (action_type IN ('START','STOP','RERUN','REPROCESS')),
+  action_reason varchar(500),
+  operator_user_id varchar(40) NOT NULL REFERENCES user_account(user_id),
+  execution_status varchar(20) NOT NULL CHECK (execution_status IN ('QUEUED','RUNNING','STOPPED','COMPLETED','FAILED','RERUN_REQUESTED')),
+  original_execution_id varchar(80),
+  created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+COMMENT ON TABLE batch_execution IS '배치 실행 요청, 중지, 재실행, 단건 재처리 요청의 조작자·사유·상태를 기록한다.';
+COMMENT ON COLUMN batch_execution.action_type IS 'START:시작|STOP:중지|RERUN:재실행|REPROCESS:단건재처리';
+COMMENT ON COLUMN batch_execution.execution_status IS 'QUEUED:대기|RUNNING:실행중|STOPPED:중지|COMPLETED:완료|FAILED:실패|RERUN_REQUESTED:재실행요청';
+COMMENT ON COLUMN batch_execution.original_execution_id IS 'batch_execution.execution_id 참조 의도 (재실행 원본 FK 미선언)';
+COMMENT ON COLUMN batch_execution.execution_parameters IS 'AdminService.create/rerunBatchExecution 시 애플리케이션에서 JSON 문자열로 갱신';
+
+CREATE TABLE IF NOT EXISTS batch_result (
+  execution_id varchar(80) PRIMARY KEY REFERENCES batch_execution(execution_id),
+  started_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  ended_at timestamp,
+  total_count integer NOT NULL DEFAULT 0,
+  success_count integer NOT NULL DEFAULT 0,
+  failure_count integer NOT NULL DEFAULT 0,
+  excluded_count integer NOT NULL DEFAULT 0,
+  elapsed_seconds integer,
+  log_file_ref varchar(500),
+  created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+COMMENT ON TABLE batch_result IS '배치 실행별 건수 요약, 소요시간, 로그 참조 정보를 조회용으로 보관한다.';
+COMMENT ON COLUMN batch_result.log_file_ref IS 'batch worker 로그 저장소 경로 참조 의도 (외부 파일 FK 미선언)';
+
+CREATE TABLE IF NOT EXISTS batch_reprocess (
+  reprocess_execution_id varchar(80) PRIMARY KEY,
+  original_execution_id varchar(80) NOT NULL REFERENCES batch_execution(execution_id),
+  failed_target_id varchar(120) NOT NULL,
+  reprocess_reason varchar(500) NOT NULL,
+  reprocess_result varchar(20) NOT NULL CHECK (reprocess_result IN ('REQUESTED','COMPLETED','FAILED')),
+  created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+COMMENT ON TABLE batch_reprocess IS '실패 대상 단건 재처리 요청과 결과 상태를 기록한다.';
+COMMENT ON COLUMN batch_reprocess.reprocess_result IS 'REQUESTED:요청됨|COMPLETED:완료|FAILED:실패';
+
 CREATE INDEX IF NOT EXISTS idx_user_account_login_id ON user_account(login_id);
 CREATE INDEX IF NOT EXISTS idx_user_role_user_status ON user_role_assignment(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_menu_parent_order ON menu(parent_menu_id, display_order);
 CREATE INDEX IF NOT EXISTS idx_menu_permission_target ON menu_permission(target_type, target_id);
 CREATE INDEX IF NOT EXISTS idx_detail_code_group_order ON detail_code(group_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_session_user_status ON app_session(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_batch_definition_owner ON batch_definition(owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_batch_execution_batch_status ON batch_execution(batch_id, execution_status);
+CREATE INDEX IF NOT EXISTS idx_batch_result_started_at ON batch_result(started_at);
+CREATE INDEX IF NOT EXISTS idx_batch_reprocess_original ON batch_reprocess(original_execution_id);
 
 INSERT INTO organization (organization_code, organization_name, organization_type)
 SELECT v.organization_code, v.organization_name, v.organization_type
@@ -253,7 +321,12 @@ FROM (VALUES
   ('MENU-STRUCT','MENU-MENU','메뉴 구조 관리','SCR-CMN-MENU-STRUCT','/admin/menu-structure','sitemap','COMMON','메뉴 구조 관리',1),
   ('MENU-INFOS','MENU-MENU','메뉴 정보 관리','SCR-CMN-MENU-INFO','/admin/menus','info','COMMON','메뉴 정보 관리',2),
   ('MENU-CODE-GROUPS','MENU-CODE','코드그룹 관리','SCR-CMN-CODE-GROUP','/admin/code-groups','folder','COMMON','코드그룹 관리',1),
-  ('MENU-DETAIL-CODES','MENU-CODE','상세코드 관리','SCR-CMN-DETAIL-CODE','/admin/detail-codes','list','COMMON','상세코드 관리',2)
+  ('MENU-DETAIL-CODES','MENU-CODE','상세코드 관리','SCR-CMN-DETAIL-CODE','/admin/detail-codes','list','COMMON','상세코드 관리',2),
+  ('MENU-BATCH','MENU-SYS','배치작업 관리',NULL,NULL,'batch','COMMON','배치작업 관리',6),
+  ('MENU-BATCH-DEFS','MENU-BATCH','배치 정의 관리','SCR-CMN-BATCH-DEF','/admin/batch-definitions','batch','COMMON','배치 정의 관리',1),
+  ('MENU-BATCH-EXECS','MENU-BATCH','배치 실행 관리','SCR-CMN-BATCH-EXEC','/admin/batch-executions','play','COMMON','배치 실행 관리',2),
+  ('MENU-BATCH-RESULTS','MENU-BATCH','배치 결과 조회','SCR-CMN-BATCH-RESULT','/admin/batch-results','result','COMMON','배치 결과 조회',3),
+  ('MENU-BATCH-REPROCESS','MENU-BATCH','배치 단건 재처리','SCR-CMN-BATCH-REPROCESS','/admin/batch-reprocess','refresh','COMMON','배치 단건 재처리',4)
 ) AS v(menu_id, parent_menu_id, menu_name, screen_id, url, icon, business_type, description, display_order)
 WHERE NOT EXISTS (
   SELECT 1 FROM menu m WHERE m.menu_id = v.menu_id
@@ -264,6 +337,36 @@ SELECT 'PERM-R09-' || m.menu_id, 'ROLE', 'R09', m.menu_id, 'Y'
 FROM menu m
 WHERE NOT EXISTS (
   SELECT 1 FROM menu_permission p WHERE p.target_type = 'ROLE' AND p.target_id = 'R09' AND p.menu_id = m.menu_id
+);
+
+INSERT INTO batch_definition (batch_id, batch_type, schedule, predecessor_batch_id, successor_batch_id, execution_parameters, max_execution_seconds, owner_user_id)
+SELECT v.batch_id, v.batch_type, v.schedule, v.predecessor_batch_id, v.successor_batch_id, v.execution_parameters, v.max_execution_seconds, v.owner_user_id
+FROM (VALUES
+  ('BATCH-EVAL-DATA','EVALUATION_DATA','0 1 * * *',NULL,'BATCH-SCORE-CALC','{"year":"2026"}',3600,'U-ADMIN'),
+  ('BATCH-SCORE-CALC','SCORE_CALCULATION','0 3 * * *','BATCH-EVAL-DATA',NULL,'{"round":"REGULAR"}',5400,'U-ADMIN')
+) AS v(batch_id, batch_type, schedule, predecessor_batch_id, successor_batch_id, execution_parameters, max_execution_seconds, owner_user_id)
+WHERE NOT EXISTS (
+  SELECT 1 FROM batch_definition b WHERE b.batch_id = v.batch_id
+);
+
+INSERT INTO batch_execution (execution_id, batch_id, execution_parameters, action_type, action_reason, operator_user_id, execution_status)
+SELECT v.execution_id, v.batch_id, v.execution_parameters, v.action_type, v.action_reason, v.operator_user_id, v.execution_status
+FROM (VALUES
+  ('EXEC-SEED-FAILED','BATCH-EVAL-DATA','{"year":"2026"}','START','초기 검증 실패 이력','U-ADMIN','FAILED'),
+  ('EXEC-SEED-DONE','BATCH-SCORE-CALC','{"round":"REGULAR"}','START','초기 검증 완료 이력','U-ADMIN','COMPLETED')
+) AS v(execution_id, batch_id, execution_parameters, action_type, action_reason, operator_user_id, execution_status)
+WHERE NOT EXISTS (
+  SELECT 1 FROM batch_execution e WHERE e.execution_id = v.execution_id
+);
+
+INSERT INTO batch_result (execution_id, ended_at, total_count, success_count, failure_count, excluded_count, elapsed_seconds, log_file_ref)
+SELECT v.execution_id, CURRENT_TIMESTAMP, v.total_count, v.success_count, v.failure_count, v.excluded_count, v.elapsed_seconds, v.log_file_ref
+FROM (VALUES
+  ('EXEC-SEED-FAILED',25,20,5,0,120,'batch-log://EXEC-SEED-FAILED'),
+  ('EXEC-SEED-DONE',30,30,0,0,180,'batch-log://EXEC-SEED-DONE')
+) AS v(execution_id, total_count, success_count, failure_count, excluded_count, elapsed_seconds, log_file_ref)
+WHERE NOT EXISTS (
+  SELECT 1 FROM batch_result r WHERE r.execution_id = v.execution_id
 );
 
 INSERT INTO code_group (group_id, group_name, description, managing_department)

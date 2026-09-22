@@ -139,4 +139,64 @@ public interface CommonMapper {
 
     @Update("UPDATE detail_code SET code_name=#{codeName}, parent_code_value=#{parentCodeValue}, sort_order=#{sortOrder}, additional_attributes=#{additionalAttributes}, use_yn=#{useYn}, updated_at=CURRENT_TIMESTAMP WHERE group_id=#{groupId} AND code_value=#{codeValue}")
     int updateDetailCode(@Param("groupId") String groupId, @Param("codeValue") String codeValue, @Param("codeName") String codeName, @Param("parentCodeValue") String parentCodeValue, @Param("sortOrder") int sortOrder, @Param("additionalAttributes") String additionalAttributes, @Param("useYn") String useYn);
+
+    @SelectProvider(type = SqlProvider.class, method = "listBatchDefinitions")
+    List<Map<String, Object>> listBatchDefinitions(Map<String, Object> params);
+
+    @SelectProvider(type = SqlProvider.class, method = "countBatchDefinitions")
+    long countBatchDefinitions(Map<String, Object> params);
+
+    @Select("SELECT batch_id as \"batchId\", batch_type as \"batchType\", schedule as \"schedule\", predecessor_batch_id as \"predecessorBatchId\", successor_batch_id as \"successorBatchId\", execution_parameters as \"executionParameters\", max_execution_seconds as \"maxExecutionSeconds\", owner_user_id as \"ownerUserId\", created_at as \"createdAt\", updated_at as \"updatedAt\" FROM batch_definition WHERE batch_id=#{batchId}")
+    Map<String, Object> findBatchDefinition(@Param("batchId") String batchId);
+
+    @Insert("INSERT INTO batch_definition (batch_id, batch_type, schedule, predecessor_batch_id, successor_batch_id, execution_parameters, max_execution_seconds, owner_user_id) VALUES (#{batchId}, #{batchType}, #{schedule}, #{predecessorBatchId}, #{successorBatchId}, #{executionParameters}, #{maxExecutionSeconds}, #{ownerUserId})")
+    int insertBatchDefinition(@Param("batchId") String batchId, @Param("batchType") String batchType, @Param("schedule") String schedule, @Param("predecessorBatchId") String predecessorBatchId, @Param("successorBatchId") String successorBatchId, @Param("executionParameters") String executionParameters, @Param("maxExecutionSeconds") Integer maxExecutionSeconds, @Param("ownerUserId") String ownerUserId);
+
+    @Update("UPDATE batch_definition SET batch_type=#{batchType}, schedule=#{schedule}, predecessor_batch_id=#{predecessorBatchId}, successor_batch_id=#{successorBatchId}, execution_parameters=#{executionParameters}, max_execution_seconds=#{maxExecutionSeconds}, owner_user_id=#{ownerUserId}, updated_at=CURRENT_TIMESTAMP WHERE batch_id=#{batchId}")
+    int updateBatchDefinition(@Param("batchId") String batchId, @Param("batchType") String batchType, @Param("schedule") String schedule, @Param("predecessorBatchId") String predecessorBatchId, @Param("successorBatchId") String successorBatchId, @Param("executionParameters") String executionParameters, @Param("maxExecutionSeconds") Integer maxExecutionSeconds, @Param("ownerUserId") String ownerUserId);
+
+    @SelectProvider(type = SqlProvider.class, method = "listBatchExecutions")
+    List<Map<String, Object>> listBatchExecutions(Map<String, Object> params);
+
+    @SelectProvider(type = SqlProvider.class, method = "countBatchExecutions")
+    long countBatchExecutions(Map<String, Object> params);
+
+    @Select("SELECT execution_id as \"executionId\", batch_id as \"batchId\", execution_parameters as \"executionParameters\", action_type as \"actionType\", action_reason as \"actionReason\", operator_user_id as \"operatorUserId\", execution_status as \"executionStatus\", original_execution_id as \"originalExecutionId\", created_at as \"createdAt\", updated_at as \"updatedAt\" FROM batch_execution WHERE execution_id=#{executionId}")
+    Map<String, Object> findBatchExecution(@Param("executionId") String executionId);
+
+    @Insert("INSERT INTO batch_execution (execution_id, batch_id, execution_parameters, action_type, action_reason, operator_user_id, execution_status, original_execution_id) VALUES (#{executionId}, #{batchId}, #{executionParameters}, #{actionType}, #{actionReason}, #{operatorUserId}, #{executionStatus}, #{originalExecutionId})")
+    int insertBatchExecution(@Param("executionId") String executionId, @Param("batchId") String batchId, @Param("executionParameters") String executionParameters, @Param("actionType") String actionType, @Param("actionReason") String actionReason, @Param("operatorUserId") String operatorUserId, @Param("executionStatus") String executionStatus, @Param("originalExecutionId") String originalExecutionId);
+
+    @Update("UPDATE batch_execution SET action_type=#{actionType}, action_reason=#{actionReason}, operator_user_id=#{operatorUserId}, execution_status=#{executionStatus}, updated_at=CURRENT_TIMESTAMP WHERE execution_id=#{executionId}")
+    int updateBatchExecutionStatus(@Param("executionId") String executionId, @Param("actionType") String actionType, @Param("actionReason") String actionReason, @Param("operatorUserId") String operatorUserId, @Param("executionStatus") String executionStatus);
+
+    @SelectProvider(type = SqlProvider.class, method = "listBatchResults")
+    List<Map<String, Object>> listBatchResults(Map<String, Object> params);
+
+    @SelectProvider(type = SqlProvider.class, method = "countBatchResults")
+    long countBatchResults(Map<String, Object> params);
+
+    @Select("SELECT execution_id as \"executionId\", log_file_ref as \"logFileRef\" FROM batch_result WHERE execution_id=#{executionId}")
+    Map<String, Object> findBatchResultLog(@Param("executionId") String executionId);
+
+    @Select("SELECT r.execution_id as \"executionId\", e.batch_id as \"batchId\", e.execution_parameters as \"executionParameters\", r.failure_count as \"failureCount\", r.log_file_ref as \"logFileRef\" FROM batch_result r JOIN batch_execution e ON e.execution_id=r.execution_id WHERE r.execution_id=#{executionId}")
+    Map<String, Object> findBatchResultSummary(@Param("executionId") String executionId);
+
+    @Insert("INSERT INTO batch_result (execution_id, started_at, ended_at, total_count, success_count, failure_count, excluded_count, elapsed_seconds, log_file_ref) VALUES (#{executionId}, CURRENT_TIMESTAMP, #{endedAt}, #{totalCount}, #{successCount}, #{failureCount}, #{excludedCount}, #{elapsedSeconds}, #{logFileRef})")
+    int insertBatchResult(@Param("executionId") String executionId, @Param("endedAt") LocalDateTime endedAt, @Param("totalCount") int totalCount, @Param("successCount") int successCount, @Param("failureCount") int failureCount, @Param("excludedCount") int excludedCount, @Param("elapsedSeconds") Integer elapsedSeconds, @Param("logFileRef") String logFileRef);
+
+    @SelectProvider(type = SqlProvider.class, method = "listBatchReprocessTargets")
+    List<Map<String, Object>> listBatchReprocessTargets(Map<String, Object> params);
+
+    @SelectProvider(type = SqlProvider.class, method = "countBatchReprocessTargets")
+    long countBatchReprocessTargets(Map<String, Object> params);
+
+    @Insert("INSERT INTO batch_reprocess (reprocess_execution_id, original_execution_id, failed_target_id, reprocess_reason, reprocess_result) VALUES (#{reprocessExecutionId}, #{originalExecutionId}, #{failedTargetId}, #{reprocessReason}, #{reprocessResult})")
+    int insertBatchReprocess(@Param("reprocessExecutionId") String reprocessExecutionId, @Param("originalExecutionId") String originalExecutionId, @Param("failedTargetId") String failedTargetId, @Param("reprocessReason") String reprocessReason, @Param("reprocessResult") String reprocessResult);
+
+    @SelectProvider(type = SqlProvider.class, method = "listBatchReprocessResults")
+    List<Map<String, Object>> listBatchReprocessResults(Map<String, Object> params);
+
+    @SelectProvider(type = SqlProvider.class, method = "countBatchReprocessResults")
+    long countBatchReprocessResults(Map<String, Object> params);
 }

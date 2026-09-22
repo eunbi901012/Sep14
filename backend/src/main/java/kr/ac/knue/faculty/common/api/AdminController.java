@@ -188,4 +188,76 @@ public class AdminController {
         authService.requireAdmin(req);
         return ApiEnvelope.ok(adminService.updateDetailCode(groupId, codeValue, body));
     }
+
+    @GetMapping("/batch-definitions")
+    public ApiEnvelope<?> listBatchDefinitions(HttpServletRequest req, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size, @RequestParam(required = false) String keyword) {
+        authService.requireAdmin(req);
+        return ApiEnvelope.ok(adminService.listBatchDefinitions(page, size, keyword));
+    }
+
+    @PostMapping("/batch-definitions")
+    public ApiEnvelope<?> createBatchDefinition(HttpServletRequest req, @RequestBody Requests.BatchDefinitionRequest body) {
+        authService.requireAdmin(req);
+        return ApiEnvelope.ok(adminService.createBatchDefinition(body));
+    }
+
+    @PutMapping("/batch-definitions/{batchId}")
+    public ApiEnvelope<?> updateBatchDefinition(HttpServletRequest req, @PathVariable String batchId, @RequestBody Requests.BatchDefinitionRequest body) {
+        authService.requireAdmin(req);
+        return ApiEnvelope.ok(adminService.updateBatchDefinition(batchId, body));
+    }
+
+    @GetMapping("/batch-executions")
+    public ApiEnvelope<?> listBatchExecutions(HttpServletRequest req, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size, @RequestParam(required = false) String keyword) {
+        authService.requireAdmin(req);
+        return ApiEnvelope.ok(adminService.listBatchExecutions(page, size, keyword));
+    }
+
+    @PostMapping("/batch-executions")
+    public ApiEnvelope<?> createBatchExecution(HttpServletRequest req, @RequestBody Requests.BatchExecutionRequest body) {
+        authService.requireAdmin(req);
+        return ApiEnvelope.ok(adminService.createBatchExecution(req, body));
+    }
+
+    @PostMapping("/batch-executions/{executionId}/stop")
+    public ApiEnvelope<?> stopBatchExecution(HttpServletRequest req, @PathVariable String executionId, @RequestBody Requests.BatchActionRequest body) {
+        authService.requireAdmin(req);
+        return ApiEnvelope.ok(adminService.stopBatchExecution(req, executionId, body));
+    }
+
+    @PostMapping("/batch-executions/{executionId}/rerun")
+    public ApiEnvelope<?> rerunBatchExecution(HttpServletRequest req, @PathVariable String executionId, @RequestBody Requests.BatchActionRequest body) {
+        authService.requireAdmin(req);
+        return ApiEnvelope.ok(adminService.rerunBatchExecution(req, executionId, body));
+    }
+
+    @GetMapping("/batch-results")
+    public ApiEnvelope<?> listBatchResults(HttpServletRequest req, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size, @RequestParam(required = false) String keyword, @RequestParam(required = false) String executionId) {
+        authService.requireAdmin(req);
+        return ApiEnvelope.ok(adminService.listBatchResults(page, size, keyword, executionId));
+    }
+
+    @GetMapping("/batch-results/{executionId}/log")
+    public ApiEnvelope<?> getBatchResultLog(HttpServletRequest req, @PathVariable String executionId) {
+        authService.requireAdmin(req);
+        return ApiEnvelope.ok(adminService.getBatchResultLog(executionId));
+    }
+
+    @GetMapping("/batch-reprocess-targets")
+    public ApiEnvelope<?> listBatchReprocessTargets(HttpServletRequest req, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size, @RequestParam(required = false) String keyword) {
+        authService.requireAdmin(req);
+        return ApiEnvelope.ok(adminService.listBatchReprocessTargets(page, size, keyword));
+    }
+
+    @PostMapping("/batch-reprocess")
+    public ApiEnvelope<?> createBatchReprocess(HttpServletRequest req, @RequestBody Requests.BatchReprocessRequest body) {
+        authService.requireAdmin(req);
+        return ApiEnvelope.ok(adminService.createBatchReprocess(req, body));
+    }
+
+    @GetMapping("/batch-reprocess-results")
+    public ApiEnvelope<?> listBatchReprocessResults(HttpServletRequest req, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size, @RequestParam(required = false) String keyword) {
+        authService.requireAdmin(req);
+        return ApiEnvelope.ok(adminService.listBatchReprocessResults(page, size, keyword));
+    }
 }

@@ -1,6 +1,7 @@
 package kr.ac.knue.faculty.common.model;
 
 import java.util.List;
+import java.util.Map;
 
 public final class Requests {
     private Requests() {}
@@ -17,4 +18,8 @@ public final class Requests {
     public record CodeGroupRequest(String groupId, String groupName, String description, String managingDepartment, String useYn) {}
     public record DetailCodeRequest(String codeValue, String codeName, String parentCodeValue, Integer sortOrder, String additionalAttributes, String useYn) {}
     public record CommonSettingRequest(String settingValue) {}
+    public record BatchDefinitionRequest(String batchId, String batchType, String schedule, String predecessorBatchId, String successorBatchId, Map<String, Object> executionParameters, Integer maxExecutionSeconds, String ownerUserId) {}
+    public record BatchExecutionRequest(String batchId, Map<String, Object> executionParameters, String actionReason) {}
+    public record BatchActionRequest(Map<String, Object> executionParameters, String actionReason) {}
+    public record BatchReprocessRequest(String originalExecutionId, String failedTargetId, String reprocessReason) {}
 }
