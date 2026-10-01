@@ -13,6 +13,11 @@ public class SqlProvider {
         return " AND (" + expr + ")";
     }
 
+    private static String baseDateWhere(Map<String, Object> p, String fromColumn, String toColumn) {
+        if (!has(p, "baseDate")) return "";
+        return " AND " + fromColumn + " <= #{baseDate} AND " + toColumn + " >= #{baseDate}";
+    }
+
     public String listUsers(Map<String, Object> p) {
         return "SELECT u.user_id as \"userId\", k.faculty_no as \"facultyNo\", k.name as \"name\", o.organization_name as \"organization\", " +
             "k.position_title as \"position\", k.employment_status as \"employmentStatus\", coalesce(u.business_role, string_agg(r.role_name, ',')) as \"role\", " +
@@ -141,6 +146,43 @@ public class SqlProvider {
 
     public String countBatchReprocessResults(Map<String, Object> p) {
         return "SELECT count(*) FROM batch_reprocess rp WHERE 1=1" + keywordWhere(p, "lower(rp.reprocess_execution_id) LIKE lower(concat('%', #{keyword}, '%')) OR lower(rp.original_execution_id) LIKE lower(concat('%', #{keyword}, '%')) OR lower(rp.failed_target_id) LIKE lower(concat('%', #{keyword}, '%')) OR lower(rp.reprocess_result) LIKE lower(concat('%', #{keyword}, '%'))");
+    }
+
+    public String listPositions(Map<String, Object> p) {
+        return "SELECT pa.position_assignment_id as \"positionAssignmentId\", pa.position_code as \"positionCode\", dc.code_name as \"positionName\", pa.user_id as \"userId\", u.display_name as \"userName\", pa.organization_code as \"organizationCode\", o.organization_name as \"organizationName\", pa.valid_from as \"validFrom\", pa.valid_to as \"validTo\", pa.created_at as \"createdAt\", pa.updated_at as \"updatedAt\" FROM position_assignment pa JOIN user_account u ON u.user_id=pa.user_id JOIN organization o ON o.organization_code=pa.organization_code LEFT JOIN detail_code dc ON dc.group_id='POSITION_CODE' AND dc.code_value=pa.position_code WHERE 1=1" +
+            baseDateWhere(p, "pa.valid_from", "pa.valid_to") +
+            keywordWhere(p, "lower(pa.position_code) LIKE lower(concat('%', #{keyword}, '%')) OR lower(u.display_name) LIKE lower(concat('%', #{keyword}, '%')) OR lower(o.organization_name) LIKE lower(concat('%', #{keyword}, '%'))") +
+            " ORDER BY pa.position_code, pa.organization_code, pa.user_id, pa.valid_from LIMIT #{size} OFFSET #{offset}";
+    }
+
+    public String countPositions(Map<String, Object> p) {
+        return "SELECT count(*) FROM position_assignment pa JOIN user_account u ON u.user_id=pa.user_id JOIN organization o ON o.organization_code=pa.organization_code WHERE 1=1" +
+            baseDateWhere(p, "pa.valid_from", "pa.valid_to") +
+            keywordWhere(p, "lower(pa.position_code) LIKE lower(concat('%', #{keyword}, '%')) OR lower(u.display_name) LIKE lower(concat('%', #{keyword}, '%')) OR lower(o.organization_name) LIKE lower(concat('%', #{keyword}, '%'))");
+    }
+
+    public String listBusinessOwners(Map<String, Object> p) {
+        return "SELECT boa.business_owner_assignment_id as \"businessOwnerAssignmentId\", boa.business_organization_code as \"businessOrganizationCode\", o.organization_name as \"businessOrganizationName\", boa.user_id as \"userId\", u.display_name as \"userName\", boa.work_area as \"workArea\", boa.assigned_from as \"assignedFrom\", boa.assigned_to as \"assignedTo\", boa.data_scope as \"dataScope\", boa.process_permission as \"processPermission\" FROM business_owner_assignment boa JOIN organization o ON o.organization_code=boa.business_organization_code JOIN user_account u ON u.user_id=boa.user_id WHERE 1=1" +
+            baseDateWhere(p, "boa.assigned_from", "boa.assigned_to") +
+            keywordWhere(p, "lower(boa.business_organization_code) LIKE lower(concat('%', #{keyword}, '%')) OR lower(u.display_name) LIKE lower(concat('%', #{keyword}, '%')) OR lower(boa.work_area) LIKE lower(concat('%', #{keyword}, '%'))") +
+            " ORDER BY boa.business_organization_code, boa.work_area, boa.user_id, boa.assigned_from LIMIT #{size} OFFSET #{offset}";
+    }
+
+    public String countBusinessOwners(Map<String, Object> p) {
+        return "SELECT count(*) FROM business_owner_assignment boa JOIN organization o ON o.organization_code=boa.business_organization_code JOIN user_account u ON u.user_id=boa.user_id WHERE 1=1" +
+            baseDateWhere(p, "boa.assigned_from", "boa.assigned_to") +
+            keywordWhere(p, "lower(boa.business_organization_code) LIKE lower(concat('%', #{keyword}, '%')) OR lower(u.display_name) LIKE lower(concat('%', #{keyword}, '%')) OR lower(boa.work_area) LIKE lower(concat('%', #{keyword}, '%'))");
+    }
+
+    public String listDataScopes(Map<String, Object> p) {
+        return "SELECT r.role_code as \"roleCode\", role.role_name as \"roleName\", r.data_scope_type as \"dataScopeType\", r.organization_code as \"organizationCode\", o.organization_name as \"organizationName\", r.work_area as \"workArea\", r.condition_json as \"conditionJson\" FROM role_data_scope_rule r JOIN role ON role.role_code=r.role_code LEFT JOIN organization o ON o.organization_code=r.organization_code WHERE 1=1" +
+            keywordWhere(p, "lower(r.role_code) LIKE lower(concat('%', #{keyword}, '%')) OR lower(role.role_name) LIKE lower(concat('%', #{keyword}, '%')) OR lower(r.data_scope_type) LIKE lower(concat('%', #{keyword}, '%')) OR lower(coalesce(r.work_area,'')) LIKE lower(concat('%', #{keyword}, '%'))") +
+            " ORDER BY r.role_code LIMIT #{size} OFFSET #{offset}";
+    }
+
+    public String countDataScopes(Map<String, Object> p) {
+        return "SELECT count(*) FROM role_data_scope_rule r JOIN role ON role.role_code=r.role_code WHERE 1=1" +
+            keywordWhere(p, "lower(r.role_code) LIKE lower(concat('%', #{keyword}, '%')) OR lower(role.role_name) LIKE lower(concat('%', #{keyword}, '%')) OR lower(r.data_scope_type) LIKE lower(concat('%', #{keyword}, '%')) OR lower(coalesce(r.work_area,'')) LIKE lower(concat('%', #{keyword}, '%'))");
     }
 
     private String executionIdWhere(Map<String, Object> p) {

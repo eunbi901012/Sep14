@@ -199,4 +199,61 @@ public interface CommonMapper {
 
     @SelectProvider(type = SqlProvider.class, method = "countBatchReprocessResults")
     long countBatchReprocessResults(Map<String, Object> params);
+
+    @SelectProvider(type = SqlProvider.class, method = "listPositions")
+    List<Map<String, Object>> listPositions(Map<String, Object> params);
+
+    @SelectProvider(type = SqlProvider.class, method = "countPositions")
+    long countPositions(Map<String, Object> params);
+
+    @Select("SELECT pa.position_assignment_id as \"positionAssignmentId\", pa.position_code as \"positionCode\", dc.code_name as \"positionName\", pa.user_id as \"userId\", u.display_name as \"userName\", pa.organization_code as \"organizationCode\", o.organization_name as \"organizationName\", pa.valid_from as \"validFrom\", pa.valid_to as \"validTo\", pa.created_at as \"createdAt\", pa.updated_at as \"updatedAt\" FROM position_assignment pa JOIN user_account u ON u.user_id=pa.user_id JOIN organization o ON o.organization_code=pa.organization_code LEFT JOIN detail_code dc ON dc.group_id='POSITION_CODE' AND dc.code_value=pa.position_code WHERE pa.position_assignment_id=#{positionAssignmentId}")
+    Map<String, Object> findPositionAssignment(@Param("positionAssignmentId") String positionAssignmentId);
+
+    @Select("SELECT pa.position_assignment_id as \"positionAssignmentId\", pa.position_code as \"positionCode\", dc.code_name as \"positionName\", pa.user_id as \"userId\", u.display_name as \"userName\", pa.organization_code as \"organizationCode\", o.organization_name as \"organizationName\", pa.valid_from as \"validFrom\", pa.valid_to as \"validTo\", pa.created_at as \"createdAt\", pa.updated_at as \"updatedAt\" FROM position_assignment pa JOIN user_account u ON u.user_id=pa.user_id JOIN organization o ON o.organization_code=pa.organization_code LEFT JOIN detail_code dc ON dc.group_id='POSITION_CODE' AND dc.code_value=pa.position_code WHERE pa.valid_from <= #{baseDate} AND pa.valid_to >= #{baseDate} ORDER BY pa.position_code, pa.organization_code, pa.user_id")
+    List<Map<String, Object>> effectivePositions(@Param("baseDate") LocalDate baseDate);
+
+    @Select("SELECT count(*) FROM position_assignment WHERE position_code=#{positionCode} AND user_id=#{userId} AND organization_code=#{organizationCode} AND position_assignment_id <> #{positionAssignmentId} AND valid_from <= #{validTo} AND valid_to >= #{validFrom}")
+    long countOverlappingPositionAssignments(@Param("positionAssignmentId") String positionAssignmentId, @Param("positionCode") String positionCode, @Param("userId") String userId, @Param("organizationCode") String organizationCode, @Param("validFrom") LocalDate validFrom, @Param("validTo") LocalDate validTo);
+
+    @Insert("INSERT INTO position_assignment (position_assignment_id, position_code, user_id, organization_code, valid_from, valid_to) VALUES (#{positionAssignmentId}, #{positionCode}, #{userId}, #{organizationCode}, #{validFrom}, #{validTo})")
+    int insertPositionAssignment(@Param("positionAssignmentId") String positionAssignmentId, @Param("positionCode") String positionCode, @Param("userId") String userId, @Param("organizationCode") String organizationCode, @Param("validFrom") LocalDate validFrom, @Param("validTo") LocalDate validTo);
+
+    @Update("UPDATE position_assignment SET position_code=#{positionCode}, user_id=#{userId}, organization_code=#{organizationCode}, valid_from=#{validFrom}, valid_to=#{validTo}, updated_at=CURRENT_TIMESTAMP WHERE position_assignment_id=#{positionAssignmentId}")
+    int updatePositionAssignment(@Param("positionAssignmentId") String positionAssignmentId, @Param("positionCode") String positionCode, @Param("userId") String userId, @Param("organizationCode") String organizationCode, @Param("validFrom") LocalDate validFrom, @Param("validTo") LocalDate validTo);
+
+    @SelectProvider(type = SqlProvider.class, method = "listBusinessOwners")
+    List<Map<String, Object>> listBusinessOwners(Map<String, Object> params);
+
+    @SelectProvider(type = SqlProvider.class, method = "countBusinessOwners")
+    long countBusinessOwners(Map<String, Object> params);
+
+    @Select("SELECT boa.business_owner_assignment_id as \"businessOwnerAssignmentId\", boa.business_organization_code as \"businessOrganizationCode\", o.organization_name as \"businessOrganizationName\", boa.user_id as \"userId\", u.display_name as \"userName\", boa.work_area as \"workArea\", boa.assigned_from as \"assignedFrom\", boa.assigned_to as \"assignedTo\", boa.data_scope as \"dataScope\", boa.process_permission as \"processPermission\", boa.created_at as \"createdAt\", boa.updated_at as \"updatedAt\" FROM business_owner_assignment boa JOIN organization o ON o.organization_code=boa.business_organization_code JOIN user_account u ON u.user_id=boa.user_id WHERE boa.business_owner_assignment_id=#{businessOwnerAssignmentId}")
+    Map<String, Object> findBusinessOwnerAssignment(@Param("businessOwnerAssignmentId") String businessOwnerAssignmentId);
+
+    @Select("SELECT count(*) FROM business_owner_assignment WHERE business_organization_code=#{businessOrganizationCode} AND user_id=#{userId} AND work_area=#{workArea} AND business_owner_assignment_id <> #{businessOwnerAssignmentId} AND assigned_from <= #{assignedTo} AND assigned_to >= #{assignedFrom}")
+    long countOverlappingBusinessOwnerAssignments(@Param("businessOwnerAssignmentId") String businessOwnerAssignmentId, @Param("businessOrganizationCode") String businessOrganizationCode, @Param("userId") String userId, @Param("workArea") String workArea, @Param("assignedFrom") LocalDate assignedFrom, @Param("assignedTo") LocalDate assignedTo);
+
+    @Insert("INSERT INTO business_owner_assignment (business_owner_assignment_id, business_organization_code, user_id, work_area, assigned_from, assigned_to, data_scope, process_permission) VALUES (#{businessOwnerAssignmentId}, #{businessOrganizationCode}, #{userId}, #{workArea}, #{assignedFrom}, #{assignedTo}, #{dataScope}, #{processPermission})")
+    int insertBusinessOwnerAssignment(@Param("businessOwnerAssignmentId") String businessOwnerAssignmentId, @Param("businessOrganizationCode") String businessOrganizationCode, @Param("userId") String userId, @Param("workArea") String workArea, @Param("assignedFrom") LocalDate assignedFrom, @Param("assignedTo") LocalDate assignedTo, @Param("dataScope") String dataScope, @Param("processPermission") String processPermission);
+
+    @Update("UPDATE business_owner_assignment SET business_organization_code=#{businessOrganizationCode}, user_id=#{userId}, work_area=#{workArea}, assigned_from=#{assignedFrom}, assigned_to=#{assignedTo}, data_scope=#{dataScope}, process_permission=#{processPermission}, updated_at=CURRENT_TIMESTAMP WHERE business_owner_assignment_id=#{businessOwnerAssignmentId}")
+    int updateBusinessOwnerAssignment(@Param("businessOwnerAssignmentId") String businessOwnerAssignmentId, @Param("businessOrganizationCode") String businessOrganizationCode, @Param("userId") String userId, @Param("workArea") String workArea, @Param("assignedFrom") LocalDate assignedFrom, @Param("assignedTo") LocalDate assignedTo, @Param("dataScope") String dataScope, @Param("processPermission") String processPermission);
+
+    @SelectProvider(type = SqlProvider.class, method = "listDataScopes")
+    List<Map<String, Object>> listDataScopes(Map<String, Object> params);
+
+    @SelectProvider(type = SqlProvider.class, method = "countDataScopes")
+    long countDataScopes(Map<String, Object> params);
+
+    @Select("SELECT count(*) FROM organization WHERE organization_code=#{organizationCode} AND use_yn='Y'")
+    long countActiveOrganization(@Param("organizationCode") String organizationCode);
+
+    @Select("SELECT count(*) FROM role WHERE role_code=#{roleCode} AND use_yn='Y'")
+    long countActiveRole(@Param("roleCode") String roleCode);
+
+    @Update("UPDATE role_data_scope_rule SET data_scope_type=#{dataScopeType}, organization_code=#{organizationCode}, work_area=#{workArea}, condition_json=#{conditionJson}, updated_at=CURRENT_TIMESTAMP WHERE role_code=#{roleCode}")
+    int updateDataScopeRule(@Param("roleCode") String roleCode, @Param("dataScopeType") String dataScopeType, @Param("organizationCode") String organizationCode, @Param("workArea") String workArea, @Param("conditionJson") String conditionJson);
+
+    @Insert("INSERT INTO role_data_scope_rule (role_code, data_scope_type, organization_code, work_area, condition_json) VALUES (#{roleCode}, #{dataScopeType}, #{organizationCode}, #{workArea}, #{conditionJson})")
+    int insertDataScopeRule(@Param("roleCode") String roleCode, @Param("dataScopeType") String dataScopeType, @Param("organizationCode") String organizationCode, @Param("workArea") String workArea, @Param("conditionJson") String conditionJson);
 }

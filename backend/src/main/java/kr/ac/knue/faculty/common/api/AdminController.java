@@ -5,6 +5,7 @@ import kr.ac.knue.faculty.common.auth.AuthService;
 import kr.ac.knue.faculty.common.model.ApiEnvelope;
 import kr.ac.knue.faculty.common.model.Requests;
 import kr.ac.knue.faculty.common.service.AdminService;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -259,5 +260,83 @@ public class AdminController {
     public ApiEnvelope<?> listBatchReprocessResults(HttpServletRequest req, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size, @RequestParam(required = false) String keyword) {
         authService.requireAdmin(req);
         return ApiEnvelope.ok(adminService.listBatchReprocessResults(page, size, keyword));
+    }
+
+    @GetMapping("/positions")
+    public ApiEnvelope<?> listPositions(HttpServletRequest req, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size, @RequestParam(required = false) String keyword, @RequestParam(required = false) String baseDate) {
+        authService.requireAdmin(req);
+        return ApiEnvelope.ok(adminService.listPositions(page, size, keyword, baseDate));
+    }
+
+    @GetMapping("/positions/effective")
+    public ApiEnvelope<?> getEffectivePositions(HttpServletRequest req, @RequestParam String baseDate) {
+        authService.requireAdmin(req);
+        return ApiEnvelope.ok(adminService.getEffectivePositions(baseDate));
+    }
+
+    @GetMapping(value = "/positions/export", produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    public ResponseEntity<byte[]> exportPositions(HttpServletRequest req, @RequestParam(required = false) String keyword) {
+        authService.requireAdmin(req);
+        return ResponseEntity.ok()
+            .header("Content-Disposition", "attachment; filename=positions.xlsx")
+            .body(adminService.exportPositions(keyword));
+    }
+
+    @PostMapping("/positions")
+    public ApiEnvelope<?> createPositionAssignment(HttpServletRequest req, @RequestBody Requests.PositionAssignmentRequest body) {
+        authService.requireAdmin(req);
+        return ApiEnvelope.ok(adminService.createPositionAssignment(body));
+    }
+
+    @PutMapping("/positions/{positionAssignmentId}")
+    public ApiEnvelope<?> updatePositionAssignment(HttpServletRequest req, @PathVariable String positionAssignmentId, @RequestBody Requests.PositionAssignmentRequest body) {
+        authService.requireAdmin(req);
+        return ApiEnvelope.ok(adminService.updatePositionAssignment(positionAssignmentId, body));
+    }
+
+    @GetMapping("/business-owners")
+    public ApiEnvelope<?> listBusinessOwners(HttpServletRequest req, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size, @RequestParam(required = false) String keyword, @RequestParam(required = false) String baseDate) {
+        authService.requireAdmin(req);
+        return ApiEnvelope.ok(adminService.listBusinessOwners(page, size, keyword, baseDate));
+    }
+
+    @GetMapping(value = "/business-owners/export", produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    public ResponseEntity<byte[]> exportBusinessOwners(HttpServletRequest req, @RequestParam(required = false) String keyword) {
+        authService.requireAdmin(req);
+        return ResponseEntity.ok()
+            .header("Content-Disposition", "attachment; filename=business-owners.xlsx")
+            .body(adminService.exportBusinessOwners(keyword));
+    }
+
+    @PostMapping("/business-owners")
+    public ApiEnvelope<?> createBusinessOwnerAssignment(HttpServletRequest req, @RequestBody Requests.BusinessOwnerAssignmentRequest body) {
+        authService.requireAdmin(req);
+        return ApiEnvelope.ok(adminService.createBusinessOwnerAssignment(body));
+    }
+
+    @PutMapping("/business-owners/{businessOwnerAssignmentId}")
+    public ApiEnvelope<?> updateBusinessOwnerAssignment(HttpServletRequest req, @PathVariable String businessOwnerAssignmentId, @RequestBody Requests.BusinessOwnerAssignmentRequest body) {
+        authService.requireAdmin(req);
+        return ApiEnvelope.ok(adminService.updateBusinessOwnerAssignment(businessOwnerAssignmentId, body));
+    }
+
+    @GetMapping("/data-scopes")
+    public ApiEnvelope<?> listDataScopes(HttpServletRequest req, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size, @RequestParam(required = false) String keyword) {
+        authService.requireAdmin(req);
+        return ApiEnvelope.ok(adminService.listDataScopes(page, size, keyword));
+    }
+
+    @GetMapping(value = "/data-scopes/export", produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    public ResponseEntity<byte[]> exportDataScopes(HttpServletRequest req, @RequestParam(required = false) String keyword) {
+        authService.requireAdmin(req);
+        return ResponseEntity.ok()
+            .header("Content-Disposition", "attachment; filename=data-scopes.xlsx")
+            .body(adminService.exportDataScopes(keyword));
+    }
+
+    @PutMapping("/data-scopes/{roleCode}")
+    public ApiEnvelope<?> saveDataScopeRule(HttpServletRequest req, @PathVariable String roleCode, @RequestBody Requests.DataScopeRuleRequest body) {
+        authService.requireAdmin(req);
+        return ApiEnvelope.ok(adminService.saveDataScopeRule(roleCode, body));
     }
 }

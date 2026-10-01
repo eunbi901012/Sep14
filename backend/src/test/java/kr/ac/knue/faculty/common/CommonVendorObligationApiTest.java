@@ -31,6 +31,8 @@ import org.springframework.test.web.servlet.MvcResult;
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 @Sql(statements = {
     "DELETE FROM app_session",
+    "DELETE FROM business_owner_assignment",
+    "DELETE FROM position_assignment",
     "DELETE FROM detail_code WHERE (group_id = 'USE_YN' AND code_value = 'T') OR group_id IN ('TEST_GROUP', 'CONTRACT_GROUP')",
     "DELETE FROM code_group WHERE group_id IN ('TEST_GROUP', 'CONTRACT_GROUP')",
     "DELETE FROM user_role_assignment WHERE assignment_id NOT IN ('URA-ADMIN-R09','URA-F1001-R01','URA-F1002-R02')",

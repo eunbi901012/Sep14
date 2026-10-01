@@ -79,7 +79,7 @@ public class AuthService {
     public void requireAdmin(HttpServletRequest request) {
         Map<String, Object> session = requireSession(request);
         List<String> roles = mapper.roleCodes(String.valueOf(session.get("userId")));
-        if (!roles.contains("R09")) throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "R09 권한이 필요합니다.");
+        if (!roles.contains("R09")) throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "R09 권한이 필요합니다.", "FUNCTION_PERMISSION");
     }
 
     private String cookie(HttpServletRequest request) {

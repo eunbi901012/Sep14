@@ -223,6 +223,49 @@ CREATE TABLE IF NOT EXISTS batch_reprocess (
 COMMENT ON TABLE batch_reprocess IS '실패 대상 단건 재처리 요청과 결과 상태를 기록한다.';
 COMMENT ON COLUMN batch_reprocess.reprocess_result IS 'REQUESTED:요청됨|COMPLETED:완료|FAILED:실패';
 
+CREATE TABLE IF NOT EXISTS position_assignment (
+  position_assignment_id varchar(80) PRIMARY KEY,
+  position_code varchar(60) NOT NULL,
+  user_id varchar(40) NOT NULL REFERENCES user_account(user_id),
+  organization_code varchar(30) NOT NULL REFERENCES organization(organization_code),
+  valid_from date NOT NULL,
+  valid_to date NOT NULL,
+  created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CHECK (valid_from <= valid_to)
+);
+COMMENT ON TABLE position_assignment IS '보직코드·대상 사용자·소속조직별 보직 지정과 일 단위 포함 유효기간을 관리한다.';
+
+CREATE TABLE IF NOT EXISTS business_owner_assignment (
+  business_owner_assignment_id varchar(80) PRIMARY KEY,
+  business_organization_code varchar(30) NOT NULL REFERENCES organization(organization_code),
+  user_id varchar(40) NOT NULL REFERENCES user_account(user_id),
+  work_area varchar(80) NOT NULL,
+  assigned_from date NOT NULL,
+  assigned_to date NOT NULL,
+  data_scope varchar(30) NOT NULL CHECK (data_scope IN ('SELF','DEPARTMENT','COLLEGE','BUSINESS_OWNER','ALL')),
+  process_permission varchar(30) NOT NULL CHECK (process_permission IN ('READ','WRITE','APPROVE','EXPORT')),
+  created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CHECK (assigned_from <= assigned_to)
+);
+COMMENT ON TABLE business_owner_assignment IS '업무조직·담당자·담당 업무영역별 담당기간, 데이터 범위와 처리 권한을 관리한다.';
+COMMENT ON COLUMN business_owner_assignment.data_scope IS 'SELF:본인|DEPARTMENT:소속학과|COLLEGE:단과대학|BUSINESS_OWNER:담당업무|ALL:전체';
+COMMENT ON COLUMN business_owner_assignment.process_permission IS 'READ:조회|WRITE:저장|APPROVE:승인|EXPORT:엑셀다운로드';
+
+CREATE TABLE IF NOT EXISTS role_data_scope_rule (
+  role_code varchar(3) PRIMARY KEY REFERENCES role(role_code),
+  data_scope_type varchar(30) NOT NULL CHECK (data_scope_type IN ('SELF','DEPARTMENT','COLLEGE','BUSINESS_OWNER','ALL')),
+  organization_code varchar(30) REFERENCES organization(organization_code),
+  work_area varchar(80),
+  condition_json text NOT NULL DEFAULT '{}',
+  created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+COMMENT ON TABLE role_data_scope_rule IS '역할별 데이터 범위 유형과 조직·업무영역 조건을 저장하고 서버 조회조건 적용 기준으로 사용한다.';
+COMMENT ON COLUMN role_data_scope_rule.data_scope_type IS 'SELF:본인|DEPARTMENT:소속학과|COLLEGE:단과대학|BUSINESS_OWNER:담당업무|ALL:전체';
+COMMENT ON COLUMN role_data_scope_rule.condition_json IS 'AdminService.saveDataScopeRule 시 애플리케이션에서 JSON 문자열로 갱신';
+
 CREATE INDEX IF NOT EXISTS idx_user_account_login_id ON user_account(login_id);
 CREATE INDEX IF NOT EXISTS idx_user_role_user_status ON user_role_assignment(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_menu_parent_order ON menu(parent_menu_id, display_order);
@@ -233,6 +276,9 @@ CREATE INDEX IF NOT EXISTS idx_batch_definition_owner ON batch_definition(owner_
 CREATE INDEX IF NOT EXISTS idx_batch_execution_batch_status ON batch_execution(batch_id, execution_status);
 CREATE INDEX IF NOT EXISTS idx_batch_result_started_at ON batch_result(started_at);
 CREATE INDEX IF NOT EXISTS idx_batch_reprocess_original ON batch_reprocess(original_execution_id);
+CREATE INDEX IF NOT EXISTS idx_position_assignment_scope_period ON position_assignment(position_code, user_id, organization_code, valid_from, valid_to);
+CREATE INDEX IF NOT EXISTS idx_business_owner_assignment_scope_period ON business_owner_assignment(business_organization_code, user_id, work_area, assigned_from, assigned_to);
+CREATE INDEX IF NOT EXISTS idx_role_data_scope_rule_org_area ON role_data_scope_rule(organization_code, work_area);
 
 INSERT INTO organization (organization_code, organization_name, organization_type)
 SELECT v.organization_code, v.organization_name, v.organization_type
@@ -374,7 +420,12 @@ SELECT v.group_id, v.group_name, v.description, v.managing_department
 FROM (VALUES
   ('USE_YN','사용여부','공통 사용여부 코드','시스템관리'),
   ('ORG_TYPE','조직유형','조직 구분 코드','시스템관리'),
-  ('ASSIGNMENT_SOURCE','역할부여방식','사용자 역할 부여방식 코드','시스템관리')
+  ('ASSIGNMENT_SOURCE','역할부여방식','사용자 역할 부여방식 코드','시스템관리'),
+  ('POSITION_CODE','보직코드','보직 관리에서 사용하는 보직 코드','시스템관리'),
+  ('WORK_AREA','업무영역','업무담당자 및 데이터 범위 권한 업무영역 코드','시스템관리'),
+  ('DATA_SCOPE_TYPE','데이터 범위 유형','서버 조회조건에 적용하는 데이터 범위 유형','시스템관리'),
+  ('PROCESS_PERMISSION','처리 권한','업무담당자 처리 권한 코드','시스템관리'),
+  ('PAGE_SIZE_OPTION','목록 표시 건수','목록 화면에서 선택 가능한 표시 건수','시스템관리')
 ) AS v(group_id, group_name, description, managing_department)
 WHERE NOT EXISTS (
   SELECT 1 FROM code_group cg WHERE cg.group_id = v.group_id
@@ -389,8 +440,41 @@ FROM (VALUES
   ('ORG_TYPE','COLLEGE','단과대학',2,'{}'),
   ('ORG_TYPE','DEPARTMENT','학과',3,'{}'),
   ('ASSIGNMENT_SOURCE','POSITION','보직 기반',1,'{}'),
-  ('ASSIGNMENT_SOURCE','MANUAL','수동 부여',2,'{}')
+  ('ASSIGNMENT_SOURCE','MANUAL','수동 부여',2,'{}'),
+  ('POSITION_CODE','DEPT_HEAD','학과장',1,'{}'),
+  ('POSITION_CODE','COLLEGE_ADMIN','단과대학 행정실 담당자',2,'{}'),
+  ('WORK_AREA','FACULTY_EVALUATION','교수업적평가',1,'{}'),
+  ('WORK_AREA','ACADEMIC_GRANT','학술지원금',2,'{}'),
+  ('DATA_SCOPE_TYPE','SELF','본인',1,'{}'),
+  ('DATA_SCOPE_TYPE','DEPARTMENT','소속학과',2,'{}'),
+  ('DATA_SCOPE_TYPE','COLLEGE','단과대학',3,'{}'),
+  ('DATA_SCOPE_TYPE','BUSINESS_OWNER','담당업무',4,'{}'),
+  ('DATA_SCOPE_TYPE','ALL','전체',5,'{}'),
+  ('PROCESS_PERMISSION','READ','조회',1,'{}'),
+  ('PROCESS_PERMISSION','WRITE','저장',2,'{}'),
+  ('PROCESS_PERMISSION','APPROVE','승인',3,'{}'),
+  ('PROCESS_PERMISSION','EXPORT','엑셀다운로드',4,'{}'),
+  ('PAGE_SIZE_OPTION','20','20건',1,'{}'),
+  ('PAGE_SIZE_OPTION','50','50건',2,'{}'),
+  ('PAGE_SIZE_OPTION','100','100건',3,'{}')
 ) AS v(group_id, code_value, code_name, sort_order, additional_attributes)
 WHERE NOT EXISTS (
   SELECT 1 FROM detail_code dc WHERE dc.group_id = v.group_id AND dc.code_value = v.code_value
+);
+
+INSERT INTO role_data_scope_rule (role_code, data_scope_type, organization_code, work_area, condition_json)
+SELECT v.role_code, v.data_scope_type, v.organization_code, v.work_area, v.condition_json
+FROM (VALUES
+  ('R01','SELF',NULL,NULL,'{}'),
+  ('R02','DEPARTMENT','CSE',NULL,'{}'),
+  ('R03','COLLEGE','EDU',NULL,'{}'),
+  ('R04','ALL',NULL,NULL,'{}'),
+  ('R05','BUSINESS_OWNER',NULL,'ACADEMIC_GRANT','{}'),
+  ('R06','BUSINESS_OWNER',NULL,'FACULTY_EVALUATION','{}'),
+  ('R07','BUSINESS_OWNER',NULL,'FACULTY_EVALUATION','{}'),
+  ('R08','ALL',NULL,NULL,'{}'),
+  ('R09','ALL',NULL,NULL,'{}')
+) AS v(role_code, data_scope_type, organization_code, work_area, condition_json)
+WHERE NOT EXISTS (
+  SELECT 1 FROM role_data_scope_rule r WHERE r.role_code = v.role_code
 );

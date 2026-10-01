@@ -67,6 +67,7 @@ type Screen = {
   supportsCreate?: boolean;
   supportsDelete?: boolean;
   supportsCancel?: boolean;
+  supportsExport?: boolean;
   detailMode?: "side" | "modal";
 };
 
@@ -84,6 +85,15 @@ const roleOptions = [
 ];
 const targetTypeOptions = ["ROLE", "ORG", "USER"];
 const assignmentSourceOptions = ["MANUAL", "POSITION"];
+const positionCodeOptions = ["DEPT_HEAD", "COLLEGE_DEAN", "CENTER_DIRECTOR"];
+const dataScopeOptions = [
+  "SELF",
+  "DEPARTMENT",
+  "COLLEGE",
+  "BUSINESS_OWNER",
+  "ALL",
+];
+const processPermissionOptions = ["READ", "WRITE", "APPROVE", "EXPORT"];
 const batchTypeOptions = [
   "EVALUATION_DATA",
   "INTERFACE",
@@ -649,6 +659,151 @@ export const screens: Screen[] = [
     supportsCreate: true,
     supportsCancel: true,
   },
+  {
+    id: "SCR-CMN-POSITION",
+    title: "보직 관리",
+    description:
+      "보직코드별 보직정보를 조회하고 대상 사용자·소속조직·유효기간을 등록·변경하며 기준일 유효 보직 대상자를 식별합니다.",
+    route: "/admin/positions",
+    menuPath: "시스템 관리 > 사용자·조직 관리 > 보직 관리",
+    endpoint: "/api/admin/positions",
+    columns: [
+      { key: "positionAssignmentId", label: "지정ID", tone: "id" },
+      { key: "positionCode", label: "보직코드", tone: "status" },
+      { key: "userId", label: "대상 사용자", tone: "id" },
+      { key: "userName", label: "성명" },
+      { key: "organizationCode", label: "소속조직", tone: "id" },
+      { key: "organizationName", label: "조직명" },
+      { key: "validFrom", label: "유효 시작일", tone: "date" },
+      { key: "validTo", label: "유효 종료일", tone: "date" },
+    ],
+    filters: [
+      { key: "keyword", label: "보직코드·성명·조직명" },
+      { key: "baseDate", label: "기준일 유효 조회", kind: "date" },
+    ],
+    formTitle: "보직 지정 등록/변경",
+    formFields: [
+      { key: "positionAssignmentId", label: "지정ID", kind: "readonly" },
+      {
+        key: "positionCode",
+        label: "보직코드",
+        kind: "select",
+        required: true,
+        options: positionCodeOptions,
+      },
+      { key: "userId", label: "대상 사용자", required: true },
+      { key: "organizationCode", label: "소속조직", required: true },
+      { key: "validFrom", label: "유효 시작일", kind: "date", required: true },
+      { key: "validTo", label: "유효 종료일", kind: "date", required: true },
+    ],
+    emptyText: "조회된 보직 지정이 없습니다.",
+    primaryAction: "보직 저장",
+    supportsCreate: true,
+    supportsCancel: true,
+    supportsExport: true,
+  },
+  {
+    id: "SCR-CMN-BUSINESS-OWNER",
+    title: "업무담당자 관리",
+    description:
+      "업무조직별 담당자·담당영역·지정기간을 조회·등록·변경하고 지정기간 내 데이터 범위와 처리 권한 적용 여부를 확인합니다.",
+    route: "/admin/business-owners",
+    menuPath: "시스템 관리 > 사용자·조직 관리 > 업무담당자 관리",
+    endpoint: "/api/admin/business-owners",
+    columns: [
+      { key: "businessOwnerAssignmentId", label: "지정ID", tone: "id" },
+      { key: "businessOrganizationCode", label: "업무조직", tone: "id" },
+      { key: "businessOrganizationName", label: "업무조직명" },
+      { key: "userId", label: "담당자", tone: "id" },
+      { key: "userName", label: "성명" },
+      { key: "workArea", label: "담당영역", tone: "status" },
+      { key: "assignedFrom", label: "지정 시작일", tone: "date" },
+      { key: "assignedTo", label: "지정 종료일", tone: "date" },
+      { key: "dataScope", label: "데이터 범위", tone: "status" },
+      { key: "processPermission", label: "처리 권한", tone: "status" },
+    ],
+    filters: [
+      { key: "keyword", label: "업무조직·성명·담당영역" },
+      { key: "baseDate", label: "기준일 유효 조회", kind: "date" },
+    ],
+    formTitle: "업무담당자 지정 등록/변경",
+    formFields: [
+      { key: "businessOwnerAssignmentId", label: "지정ID", kind: "readonly" },
+      { key: "businessOrganizationCode", label: "업무조직", required: true },
+      { key: "userId", label: "담당자", required: true },
+      { key: "workArea", label: "담당영역", required: true },
+      {
+        key: "assignedFrom",
+        label: "지정 시작일",
+        kind: "date",
+        required: true,
+      },
+      { key: "assignedTo", label: "지정 종료일", kind: "date", required: true },
+      {
+        key: "dataScope",
+        label: "데이터 범위",
+        kind: "select",
+        required: true,
+        options: dataScopeOptions,
+      },
+      {
+        key: "processPermission",
+        label: "처리 권한",
+        kind: "select",
+        required: true,
+        options: processPermissionOptions,
+      },
+    ],
+    emptyText: "조회된 업무담당자 지정이 없습니다.",
+    primaryAction: "담당자 지정 저장",
+    supportsCreate: true,
+    supportsCancel: true,
+    supportsExport: true,
+  },
+  {
+    id: "SCR-CMN-DATA-SCOPE",
+    title: "데이터 범위 권한",
+    description:
+      "역할별 데이터 범위 유형과 조직코드·업무영역 조건을 조회·저장하고 서버 조회조건 강제 적용 기준을 관리합니다.",
+    route: "/admin/data-scopes",
+    menuPath: "시스템 관리 > 역할·권한 관리 > 데이터 범위 권한",
+    endpoint: "/api/admin/data-scopes",
+    columns: [
+      { key: "roleCode", label: "역할코드", tone: "role" },
+      { key: "roleName", label: "역할명" },
+      { key: "dataScopeType", label: "범위 유형", tone: "status" },
+      { key: "organizationCode", label: "조직코드", tone: "id" },
+      { key: "organizationName", label: "조직명" },
+      { key: "workArea", label: "업무영역", tone: "status" },
+      { key: "conditionJson", label: "조건" },
+    ],
+    filters: [{ key: "keyword", label: "역할·범위유형·업무영역" }],
+    formTitle: "역할별 데이터 범위 규칙 설정",
+    formFields: [
+      {
+        key: "roleCode",
+        label: "역할코드",
+        kind: "select",
+        required: true,
+        readonlyOnEdit: true,
+        options: roleOptions,
+      },
+      {
+        key: "dataScopeType",
+        label: "범위 유형",
+        kind: "select",
+        required: true,
+        options: dataScopeOptions,
+      },
+      { key: "organizationCode", label: "조직코드" },
+      { key: "workArea", label: "업무영역" },
+    ],
+    emptyText: "조회된 데이터 범위 규칙이 없습니다.",
+    primaryAction: "데이터 범위 저장",
+    supportsCreate: true,
+    supportsCancel: true,
+    supportsExport: true,
+  },
 ];
 
 const screenByRoute = (route: string) =>
@@ -693,7 +848,7 @@ function extractItems(data: unknown): Row[] {
   return value.items ?? value.nodes ?? value.permissions ?? [];
 }
 
-function App() {
+export function App() {
   const [route, setRoute] = useState(
     window.location.pathname === "/" ? "/login" : window.location.pathname,
   );
@@ -933,6 +1088,29 @@ function AdminScreen({
     [screen, filters],
   );
 
+  async function exportCurrentScreen() {
+    setStatus("loading");
+    setMessage(
+      "현재 검색조건과 서버 데이터 범위의 교집합으로 Excel을 생성합니다.",
+    );
+    try {
+      const res = await fetch(buildExportEndpoint(screen, filters), {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await res.blob();
+      setStatus("success");
+      setMessage("Excel 다운로드 요청이 처리되었습니다.");
+    } catch (error) {
+      const text =
+        error instanceof Error
+          ? error.message
+          : "Excel 다운로드 중 오류가 발생했습니다.";
+      setStatus(hasPermissionError(text) ? "permission" : "error");
+      setMessage(text);
+    }
+  }
+
   async function load() {
     if (
       screen.method === "DETAIL_CODES" &&
@@ -1083,6 +1261,11 @@ function AdminScreen({
           {screen.supportsCreate && (
             <button className="secondary" onClick={resetForm}>
               신규
+            </button>
+          )}
+          {screen.supportsExport && (
+            <button className="secondary" onClick={exportCurrentScreen}>
+              Excel 다운로드
             </button>
           )}
           <button onClick={load}>
@@ -1552,6 +1735,26 @@ function getInitialFilters(screen: Screen): Row {
   return {};
 }
 
+export function buildDataScopeExportEndpoint(filters: Row) {
+  return buildExportEndpoint(
+    {
+      route: "/admin/data-scopes",
+      endpoint: "/api/admin/data-scopes",
+    } as Screen,
+    filters,
+  );
+}
+
+export function buildExportEndpoint(screen: Screen, filters: Row) {
+  const params = new URLSearchParams();
+  const keyword = String(filters.keyword ?? "").trim();
+  if (keyword) params.set("keyword", keyword);
+  const exportEndpoint = `${screen.endpoint}/export`;
+  return params.toString()
+    ? `${exportEndpoint}?${params.toString()}`
+    : exportEndpoint;
+}
+
 export function buildEndpoint(screen: Screen, filters: Row) {
   if (screen.method === "PERMISSIONS") {
     const targetType = encodeURIComponent(String(filters.targetType || "ROLE"));
@@ -1561,8 +1764,14 @@ export function buildEndpoint(screen: Screen, filters: Row) {
   if (screen.method === "DETAIL_CODES") {
     return `/api/admin/code-groups/${encodeURIComponent(String(filters.groupId ?? ""))}/detail-codes`;
   }
+  if (screen.route === "/admin/positions") {
+    const baseDate = String(filters.baseDate ?? "").trim();
+    if (baseDate) {
+      return `/api/admin/positions/effective?baseDate=${encodeURIComponent(baseDate)}`;
+    }
+  }
   const params = new URLSearchParams();
-  for (const key of ["keyword", "filter", "useYn"]) {
+  for (const key of ["keyword", "filter", "useYn", "baseDate"]) {
     const value = String(filters[key] ?? "").trim();
     if (value) params.set(key, value);
   }
@@ -1589,6 +1798,10 @@ function emptyForm(screen: Screen, filters: Row): Row {
   }
   if (screen.route === "/admin/batch-executions")
     base.executionParameters = "{}";
+  if (screen.route === "/admin/data-scopes") {
+    base.roleCode = "R01";
+    base.dataScopeType = "SELF";
+  }
   return base;
 }
 
@@ -1794,6 +2007,60 @@ export async function saveScreen(
     return api("/api/admin/batch-reprocess", {
       method: "POST",
       body: JSON.stringify(body),
+    });
+  }
+  if (screen.route === "/admin/positions") {
+    const positionAssignmentId =
+      selected?.positionAssignmentId || form.positionAssignmentId;
+    const payload = {
+      positionCode: form.positionCode,
+      userId: form.userId,
+      organizationCode: form.organizationCode,
+      validFrom: form.validFrom,
+      validTo: form.validTo,
+    };
+    return api(
+      positionAssignmentId
+        ? `/api/admin/positions/${positionAssignmentId}`
+        : "/api/admin/positions",
+      {
+        method: positionAssignmentId ? "PUT" : "POST",
+        body: JSON.stringify(payload),
+      },
+    );
+  }
+  if (screen.route === "/admin/business-owners") {
+    const businessOwnerAssignmentId =
+      selected?.businessOwnerAssignmentId || form.businessOwnerAssignmentId;
+    const payload = {
+      businessOrganizationCode: form.businessOrganizationCode,
+      userId: form.userId,
+      workArea: form.workArea,
+      assignedFrom: form.assignedFrom,
+      assignedTo: form.assignedTo,
+      dataScope: form.dataScope,
+      processPermission: form.processPermission,
+    };
+    return api(
+      businessOwnerAssignmentId
+        ? `/api/admin/business-owners/${businessOwnerAssignmentId}`
+        : "/api/admin/business-owners",
+      {
+        method: businessOwnerAssignmentId ? "PUT" : "POST",
+        body: JSON.stringify(payload),
+      },
+    );
+  }
+  if (screen.route === "/admin/data-scopes") {
+    const roleCode = selected?.roleCode || form.roleCode;
+    if (!roleCode) throw new Error("roleCode는 필수입니다.");
+    return api(`/api/admin/data-scopes/${roleCode}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        dataScopeType: form.dataScopeType,
+        organizationCode: form.organizationCode,
+        workArea: form.workArea,
+      }),
     });
   }
 }
