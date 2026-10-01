@@ -2986,6 +2986,187 @@ paths:
         '400': { description: 요청 오류, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
         '401': { description: 미인증, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
         '403': { description: 권한 없음, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+  /api/admin/positions:
+    get:
+      operationId: listPositions
+      summary: 보직정보 조회
+      x-related-requirements: [REQ-249, REQ-252, REQ-264, REQ-275]
+      security: [{ cookieAuth: [] }]
+      x-roles: [R09]
+      parameters: [{ $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/SizeParam' }, { $ref: '#/components/parameters/KeywordParam' }, { name: baseDate, in: query, required: false, schema: { type: string, format: date } }]
+      responses:
+        '200': { description: 정상 응답, content: { application/json: { schema: { allOf: [ { $ref: '#/components/schemas/ApiResponse' }, { type: object, required: [data], properties: { data: { type: object, required: [items, page, size, totalElements], properties: { items: { type: array, items: { type: object, additionalProperties: true } }, page: { type: integer }, size: { type: integer }, totalElements: { type: integer } } } } } ] } } } }
+        '400': { description: 요청 오류, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '401': { description: 미인증, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '403': { description: 권한 없음, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+    post:
+      operationId: createPositionAssignment
+      summary: 보직 등록
+      x-related-requirements: [REQ-250, REQ-251, REQ-259, REQ-260, REQ-261, REQ-262, REQ-263, REQ-272, REQ-273, REQ-274]
+      security: [{ cookieAuth: [] }]
+      x-roles: [R09]
+      x-business-rules: ['유효 시작일은 종료일보다 늦을 수 없다.', '동일 보직코드·대상 사용자·소속조직 조합의 기간은 겹칠 수 없다.']
+      x-side-effects: ['position_assignment 행을 생성하고 후속 listPositions 조회에 반영한다.']
+      x-state-transitions: ['미지정 -> 유효']
+      x-required-tests: ['happy: R09가 보직코드·대상 사용자·소속조직·유효기간을 저장 -> position_assignment 행이 생성되고 후속 조회에 표시된다', 'auth: non-R09 저장 요청 -> 401/403 ApiError와 position_assignment 미생성', 'validation: validFrom이 validTo보다 늦음 -> 400 field error와 저장 없음', 'business: 동일 관리대상 기간 중복 -> 400 ApiError와 기존 position_assignment 유지', 'side-effect: 저장 성공 -> position_assignment.created_at/updated_at 기록이 조회된다']
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [positionCode, userId, organizationCode, validFrom, validTo], properties: { positionCode: { type: string }, userId: { type: string }, organizationCode: { type: string }, validFrom: { type: string, format: date }, validTo: { type: string, format: date } } } } } }
+      responses:
+        '200': { description: 정상 응답, content: { application/json: { schema: { allOf: [ { $ref: '#/components/schemas/ApiResponse' }, { type: object, required: [data], properties: { data: { type: object, required: [positionAssignmentId, positionCode, userId, organizationCode, validFrom, validTo], properties: { positionAssignmentId: { type: string }, positionCode: { type: string }, userId: { type: string }, organizationCode: { type: string }, validFrom: { type: string, format: date }, validTo: { type: string, format: date } } } } } ] } } } }
+        '400': { description: 요청 오류, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '401': { description: 미인증, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '403': { description: 권한 없음, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+  /api/admin/positions/{positionAssignmentId}:
+    put:
+      operationId: updatePositionAssignment
+      summary: 보직 변경
+      x-related-requirements: [REQ-250, REQ-251, REQ-259, REQ-260, REQ-261, REQ-262, REQ-263, REQ-272, REQ-273, REQ-274]
+      security: [{ cookieAuth: [] }]
+      x-roles: [R09]
+      x-business-rules: ['변경 시 자기 자신을 제외한 동일 관리대상 이력과 기간 중복을 비교한다.', '중복 기간 오류 시 기존 저장값과 권한 적용 결과를 변경하지 않는다.']
+      x-side-effects: ['position_assignment 행을 갱신하고 후속 기준일 조회에 반영한다.']
+      x-state-transitions: ['유효 -> 유효', '유효 -> 만료']
+      x-required-tests: ['happy: R09가 기존 보직의 유효기간을 변경 -> position_assignment.valid_from/valid_to 변경값이 후속 조회된다', 'auth: non-R09 변경 요청 -> 401/403 ApiError와 기존 기간 유지', 'validation: 필수 userId 누락 -> 400 field error와 기존 행 유지', 'business: 기존 기간과 하루라도 중복 -> 400 ApiError와 권한 적용 결과 유지', 'side-effect: 변경 성공 -> position_assignment.updated_at 갱신']
+      parameters: [{ name: positionAssignmentId, in: path, required: true, schema: { type: string } }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [positionCode, userId, organizationCode, validFrom, validTo], properties: { positionCode: { type: string }, userId: { type: string }, organizationCode: { type: string }, validFrom: { type: string, format: date }, validTo: { type: string, format: date } } } } } }
+      responses:
+        '200': { description: 정상 응답, content: { application/json: { schema: { allOf: [ { $ref: '#/components/schemas/ApiResponse' }, { type: object, required: [data], properties: { data: { type: object, required: [positionAssignmentId], properties: { positionAssignmentId: { type: string } } } } } ] } } } }
+        '400': { description: 요청 오류, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '401': { description: 미인증, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '403': { description: 권한 없음, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+  /api/admin/positions/effective:
+    get:
+      operationId: getEffectivePositions
+      summary: 기준일 유효 보직 식별
+      x-related-requirements: [REQ-252]
+      security: [{ cookieAuth: [] }]
+      x-roles: [R09]
+      parameters: [{ name: baseDate, in: query, required: true, schema: { type: string, format: date } }]
+      x-pagination: { paginated: false, reason: 기준일 유효 대상 식별 결과는 기준일 조건의 bounded result set이다. }
+      responses:
+        '200': { description: 정상 응답, content: { application/json: { schema: { allOf: [ { $ref: '#/components/schemas/ApiResponse' }, { type: object, required: [data], properties: { data: { type: object, required: [items], properties: { items: { type: array, items: { type: object, additionalProperties: true } } } } } } ] } } } }
+        '400': { description: 요청 오류, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '401': { description: 미인증, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '403': { description: 권한 없음, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+  /api/admin/positions/export:
+    get:
+      operationId: exportPositions
+      summary: 보직 목록 Excel 다운로드
+      x-related-requirements: [REQ-215]
+      security: [{ cookieAuth: [] }]
+      x-roles: [R09]
+      parameters: [{ $ref: '#/components/parameters/KeywordParam' }]
+      x-pagination: { paginated: false, reason: Excel 다운로드는 현재 검색·정렬 조건 전체와 서버 허용 범위의 교집합을 반환한다. }
+      responses:
+        '200': { description: Excel binary, content: { application/vnd.openxmlformats-officedocument.spreadsheetml.sheet: { schema: { type: string, format: binary } } } }
+        '400': { description: 요청 오류, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '401': { description: 미인증, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '403': { description: 권한 없음, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+  /api/admin/business-owners:
+    get:
+      operationId: listBusinessOwners
+      summary: 업무담당자 조회
+      x-related-requirements: [REQ-280, REQ-285, REQ-297]
+      security: [{ cookieAuth: [] }]
+      x-roles: [R09]
+      parameters: [{ $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/SizeParam' }, { $ref: '#/components/parameters/KeywordParam' }, { name: baseDate, in: query, required: false, schema: { type: string, format: date } }]
+      responses:
+        '200': { description: 정상 응답, content: { application/json: { schema: { allOf: [ { $ref: '#/components/schemas/ApiResponse' }, { type: object, required: [data], properties: { data: { type: object, required: [items, page, size, totalElements], properties: { items: { type: array, items: { type: object, additionalProperties: true } }, page: { type: integer }, size: { type: integer }, totalElements: { type: integer } } } } } ] } } } }
+        '400': { description: 요청 오류, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '401': { description: 미인증, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '403': { description: 권한 없음, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+    post:
+      operationId: createBusinessOwnerAssignment
+      summary: 업무담당자 등록
+      x-related-requirements: [REQ-281, REQ-282, REQ-283, REQ-284, REQ-295, REQ-296, REQ-307, REQ-308, REQ-309, REQ-310]
+      security: [{ cookieAuth: [] }]
+      x-roles: [R09]
+      x-business-rules: ['데이터 범위와 처리 권한은 지정된 업무조직·업무영역·기간 안에서만 유효하다.', '동일 업무조직·담당자·담당 업무영역 조합의 지정기간은 겹칠 수 없다.']
+      x-side-effects: ['business_owner_assignment 행을 생성하고 후속 listBusinessOwners 조회에 반영한다.']
+      x-state-transitions: ['미지정 -> 지정']
+      x-required-tests: ['happy: R09가 담당자·업무영역·지정기간을 저장 -> business_owner_assignment 행이 후속 조회에 표시된다', 'auth: non-R09 저장 요청 -> 401/403 ApiError와 business_owner_assignment 미생성', 'validation: assignedFrom이 assignedTo보다 늦음 -> 400 field error와 저장 없음', 'business: 동일 관리대상 지정기간 중복 -> 400 ApiError와 기존 권한 적용 결과 유지', 'side-effect: 저장 성공 -> business_owner_assignment.created_at/updated_at 기록이 조회된다']
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [businessOrganizationCode, userId, workArea, assignedFrom, assignedTo, dataScope, processPermission], properties: { businessOrganizationCode: { type: string }, userId: { type: string }, workArea: { type: string }, assignedFrom: { type: string, format: date }, assignedTo: { type: string, format: date }, dataScope: { type: string }, processPermission: { type: string } } } } } }
+      responses:
+        '200': { description: 정상 응답, content: { application/json: { schema: { allOf: [ { $ref: '#/components/schemas/ApiResponse' }, { type: object, required: [data], properties: { data: { type: object, required: [businessOwnerAssignmentId], properties: { businessOwnerAssignmentId: { type: string } } } } } ] } } } }
+        '400': { description: 요청 오류, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '401': { description: 미인증, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '403': { description: 권한 없음, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+  /api/admin/business-owners/{businessOwnerAssignmentId}:
+    put:
+      operationId: updateBusinessOwnerAssignment
+      summary: 업무담당자 변경
+      x-related-requirements: [REQ-281, REQ-282, REQ-283, REQ-284, REQ-295, REQ-296, REQ-307, REQ-308, REQ-309, REQ-310]
+      security: [{ cookieAuth: [] }]
+      x-roles: [R09]
+      x-business-rules: ['변경 시 자기 자신을 제외한 동일 관리대상 이력과 기간 중복을 비교한다.', '중복 기간 오류 시 기존 저장값과 권한 적용 결과를 변경하지 않는다.']
+      x-side-effects: ['business_owner_assignment 행을 갱신하고 후속 권한 적용 조회에 반영한다.']
+      x-state-transitions: ['지정 -> 지정', '지정 -> 지정 종료']
+      x-required-tests: ['happy: R09가 기존 담당자 지정기간을 변경 -> business_owner_assignment.assigned_from/assigned_to 변경값이 후속 조회된다', 'auth: non-R09 변경 요청 -> 401/403 ApiError와 기존 지정 유지', 'validation: workArea 누락 -> 400 field error와 기존 행 유지', 'business: 동일 업무조직·담당자·업무영역 기간 중복 -> 400 ApiError와 기존 권한 적용 결과 유지', 'side-effect: 변경 성공 -> business_owner_assignment.updated_at 갱신']
+      parameters: [{ name: businessOwnerAssignmentId, in: path, required: true, schema: { type: string } }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [businessOrganizationCode, userId, workArea, assignedFrom, assignedTo, dataScope, processPermission], properties: { businessOrganizationCode: { type: string }, userId: { type: string }, workArea: { type: string }, assignedFrom: { type: string, format: date }, assignedTo: { type: string, format: date }, dataScope: { type: string }, processPermission: { type: string } } } } } }
+      responses:
+        '200': { description: 정상 응답, content: { application/json: { schema: { allOf: [ { $ref: '#/components/schemas/ApiResponse' }, { type: object, required: [data], properties: { data: { type: object, required: [businessOwnerAssignmentId], properties: { businessOwnerAssignmentId: { type: string } } } } } ] } } } }
+        '400': { description: 요청 오류, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '401': { description: 미인증, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '403': { description: 권한 없음, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+  /api/admin/business-owners/export:
+    get:
+      operationId: exportBusinessOwners
+      summary: 업무담당자 Excel 다운로드
+      x-related-requirements: [REQ-215]
+      security: [{ cookieAuth: [] }]
+      x-roles: [R09]
+      parameters: [{ $ref: '#/components/parameters/KeywordParam' }]
+      x-pagination: { paginated: false, reason: Excel 다운로드는 현재 검색·정렬 조건 전체와 서버 허용 범위의 교집합을 반환한다. }
+      responses:
+        '200': { description: Excel binary, content: { application/vnd.openxmlformats-officedocument.spreadsheetml.sheet: { schema: { type: string, format: binary } } } }
+        '400': { description: 요청 오류, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '401': { description: 미인증, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '403': { description: 권한 없음, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+  /api/admin/data-scopes:
+    get:
+      operationId: listDataScopes
+      summary: 역할별 데이터 범위 조회
+      x-related-requirements: [REQ-315]
+      security: [{ cookieAuth: [] }]
+      x-roles: [R09]
+      parameters: [{ $ref: '#/components/parameters/PageParam' }, { $ref: '#/components/parameters/SizeParam' }, { $ref: '#/components/parameters/KeywordParam' }]
+      responses:
+        '200': { description: 정상 응답, content: { application/json: { schema: { allOf: [ { $ref: '#/components/schemas/ApiResponse' }, { type: object, required: [data], properties: { data: { type: object, required: [items, page, size, totalElements], properties: { items: { type: array, items: { type: object, additionalProperties: true } }, page: { type: integer }, size: { type: integer }, totalElements: { type: integer } } } } } ] } } } }
+        '400': { description: 요청 오류, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '401': { description: 미인증, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '403': { description: 권한 없음, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+  /api/admin/data-scopes/{roleCode}:
+    put:
+      operationId: saveDataScopeRule
+      summary: 데이터 범위 규칙 저장
+      x-related-requirements: [REQ-316, REQ-317, REQ-318, REQ-319, REQ-320, REQ-322, REQ-328, REQ-329, REQ-330, REQ-342, REQ-347]
+      security: [{ cookieAuth: [] }]
+      x-roles: [R09]
+      x-business-rules: ['데이터 범위는 서버 조회조건으로 강제 적용한다.', '범위 밖 등록·변경·삭제·일괄처리 요청은 저장 또는 처리 결과를 변경하지 않고 거부한다.', '역할별 기능 권한 이후 데이터 범위, 기간 조건, 대상 데이터 인증상태를 판정한다.']
+      x-side-effects: ['role_data_scope_rule 행을 저장하고 후속 목록·Excel·서버 처리 범위 판정에 반영한다.']
+      x-state-transitions: ['undefined -> active', 'active -> active']
+      x-required-tests: ['happy: R09가 roleCode의 dataScopeType과 조건을 저장 -> role_data_scope_rule 저장값이 후속 조회된다', 'auth: non-R09 저장 요청 -> 401/403 ApiError와 기존 role_data_scope_rule 유지', 'validation: dataScopeType 누락 -> 400 field error와 저장 없음', 'business: 범위 밖 조직코드로 처리 요청 -> 403 ApiError와 대상 데이터 변경 없음', 'side-effect: 저장 성공 -> 후속 listDataScopes/exportDataScopes가 갱신된 서버 범위를 적용한다']
+      parameters: [{ name: roleCode, in: path, required: true, schema: { $ref: '#/components/schemas/RoleCode' } }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [dataScopeType], properties: { dataScopeType: { type: string, enum: [SELF, DEPARTMENT, COLLEGE, BUSINESS_OWNER, ALL] }, organizationCode: { type: string, nullable: true }, workArea: { type: string, nullable: true } } } } } }
+      responses:
+        '200': { description: 정상 응답, content: { application/json: { schema: { allOf: [ { $ref: '#/components/schemas/ApiResponse' }, { type: object, required: [data], properties: { data: { type: object, required: [roleCode, dataScopeType], properties: { roleCode: { $ref: '#/components/schemas/RoleCode' }, dataScopeType: { type: string }, organizationCode: { type: string, nullable: true }, workArea: { type: string, nullable: true } } } } } ] } } } }
+        '400': { description: 요청 오류, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '401': { description: 미인증, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '403': { description: 권한 없음, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+  /api/admin/data-scopes/export:
+    get:
+      operationId: exportDataScopes
+      summary: 데이터 범위 Excel 다운로드
+      x-related-requirements: [REQ-215, REQ-321]
+      security: [{ cookieAuth: [] }]
+      x-roles: [R09]
+      parameters: [{ $ref: '#/components/parameters/KeywordParam' }]
+      x-pagination: { paginated: false, reason: Excel 다운로드는 현재 검색·정렬 조건 전체와 서버 허용 범위의 교집합을 반환한다. }
+      responses:
+        '200': { description: Excel binary, content: { application/vnd.openxmlformats-officedocument.spreadsheetml.sheet: { schema: { type: string, format: binary } } } }
+        '400': { description: 요청 오류, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '401': { description: 미인증, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+        '403': { description: 권한 없음, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
   /api/health:
     get:
       operationId: health
@@ -3192,3 +3373,198 @@ x-uncovered-requirements:
   - canonical_id: REQ-050
     status: non-functional
     evidence: 과거·미래 기준일별 조직 조회 포함 여부는 OQ-004 미확인 정책으로, API에서 기준일 파라미터를 임의 추가하지 않는다.
+  - canonical_id: REQ-212
+    status: data-constraint
+    evidence: CMN-104 단과대학(원) 행정실 담당자가 특정 교원에게 개별적으로 부여한 수정 권한은 대상 교원, 적용 영역, 유효기간 요구는 data-contract 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-224
+    status: screen-only
+    evidence: CMN-708 화면 레이아웃을 표준화하여 적용해야 한다. 요구는 ui-supporting 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-225
+    status: screen-only
+    evidence: CMN-708 화면 색상을 표준화하여 적용해야 한다. 요구는 ui-supporting 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-226
+    status: screen-only
+    evidence: CMN-708 화면 글꼴을 표준화하여 적용해야 한다. 요구는 ui-supporting 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-227
+    status: screen-only
+    evidence: CMN-708 버튼을 표준화하여 적용해야 한다. 요구는 ui-supporting 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-228
+    status: screen-only
+    evidence: CMN-708 아이콘을 표준화하여 적용해야 한다. 요구는 ui-supporting 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-229
+    status: screen-only
+    evidence: CMN-708 용어를 표준화하여 적용해야 한다. 요구는 ui-supporting 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-230
+    status: non-functional
+    evidence: IFC-106 한국형 웹 콘텐츠 접근성 지침 2.1을 준수해야 한다. 요구는 non-functional 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-231
+    status: data-constraint
+    evidence: DAR-107 임시 데이터는 사용 완료 후 삭제해야 한다. 요구는 data-contract 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-232
+    status: non-functional
+    evidence: PER-02 모든 질의는 평균 응답시간 기준 3초 이내에 결과를 표시해야 한다. 요구는 non-functional 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-233
+    status: non-functional
+    evidence: PER-03 정상 상태에서 사용자의 건별 질의 요청을 5초 이내에 처리해야 한다. 요구는 non-functional 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-234
+    status: non-functional
+    evidence: PER-03 정상 상태에서 처리한 건별 질의 결과를 화면에 표시해야 한다. 요구는 non-functional 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-235
+    status: non-functional
+    evidence: PER-04 주요 페이지의 용량을 3MB 이하로 최적화해야 한다. 요구는 non-functional 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-236
+    status: non-functional
+    evidence: SER-02 소프트웨어 개발보안 가이드에 따라 시큐어 코딩을 적용해야 한다. 요구는 non-functional 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-237
+    status: non-functional
+    evidence: SER-02 웹 취약점을 제거해야 한다. 요구는 non-functional 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-238
+    status: non-functional
+    evidence: SER-03 개인정보 안전성 확보조치 기준에 따라 개인정보를 보호해야 한다. 요구는 non-functional 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-239
+    status: non-functional
+    evidence: SER-03 구간 암호화를 적용해야 한다. 요구는 non-functional 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-240
+    status: non-functional
+    evidence: QUR-04 태블릿의 iPadOS 환경에서 정상 동작을 확인해야 한다. 요구는 non-functional 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-241
+    status: non-functional
+    evidence: QUR-04 태블릿의 Android 환경에서 정상 동작을 확인해야 한다. 요구는 non-functional 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-242
+    status: non-functional
+    evidence: QUR-04 데스크탑 및 랩탑의 Windows 환경에서 정상 동작을 확인해야 한다. 요구는 non-functional 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-243
+    status: non-functional
+    evidence: QUR-04 데스크탑 및 랩탑의 macOS 환경에서 정상 동작을 확인해야 한다. 요구는 non-functional 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-244
+    status: non-functional
+    evidence: QUR-04 Edge 브라우저에서 정상 동작을 확인해야 한다. 요구는 non-functional 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-245
+    status: non-functional
+    evidence: QUR-04 Chrome 브라우저에서 정상 동작을 확인해야 한다. 요구는 non-functional 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-246
+    status: non-functional
+    evidence: QUR-04 Safari 브라우저에서 정상 동작을 확인해야 한다. 요구는 non-functional 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-247
+    status: non-functional
+    evidence: QUR-04 Opera 브라우저에서 정상 동작을 확인해야 한다. 요구는 non-functional 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-248
+    status: non-functional
+    evidence: QUR-04 Whale 브라우저에서 정상 동작을 확인해야 한다. 요구는 non-functional 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-253
+    status: data-constraint
+    evidence: CMN-FR-003 보직코드를 관리해야 한다. 요구는 data-contract 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-254
+    status: data-constraint
+    evidence: CMN-FR-003 대상 사용자를 관리해야 한다. 요구는 data-contract 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-255
+    status: data-constraint
+    evidence: CMN-FR-003 소속조직을 관리해야 한다. 요구는 data-contract 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-257
+    status: data-constraint
+    evidence: CMN-FR-003 유효 종료일을 관리해야 한다. 요구는 data-contract 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-258
+    status: non-functional
+    evidence: CMN-FR-003 보직은 지정된 소속조직과 유효기간에 연결하여 관리해야 한다. 요구는 api-contract 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-267
+    status: out-of-scope
+    evidence: CMN-FR-003 보직에 따른 세부 메뉴 권한을 설정하지 않는다. 요구는 out-of-scope 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-268
+    status: out-of-scope
+    evidence: CMN-FR-003 보직에 따른 세부 기능 권한을 설정하지 않는다. 요구는 out-of-scope 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-271
+    status: out-of-scope
+    evidence: CMN-FR-003 이 기능에서 물리 삭제 기능을 새로 추가하지 않는다. 요구는 out-of-scope 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-276
+    status: non-functional
+    evidence: CMN-FR-003 보직은 지정된 소속조직과 유효기간에 연결해서만 유효하다. 요구는 api-contract 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-279
+    status: non-functional
+    evidence: CMN-FR-003 서로 다른 보직코드, 대상 사용자 또는 소속조직의 기간은 독립적으로 관리할 수 있어야 한다. 요구는 api-contract 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-286
+    status: data-constraint
+    evidence: CMN-FR-004 업무조직을 관리해야 한다. 요구는 data-contract 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-287
+    status: data-constraint
+    evidence: CMN-FR-004 업무조직에는 단과대학, 산학협력단, 입학인재관리과 등을 포함할 수 있다. 요구는 data-contract 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-288
+    status: data-constraint
+    evidence: CMN-FR-004 담당자를 관리해야 한다. 요구는 data-contract 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-289
+    status: data-constraint
+    evidence: CMN-FR-004 담당 업무영역을 관리해야 한다. 요구는 data-contract 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-290
+    status: data-constraint
+    evidence: CMN-FR-004 지정 시작일을 관리해야 한다. 요구는 data-contract 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-291
+    status: data-constraint
+    evidence: CMN-FR-004 지정 종료일을 관리해야 한다. 요구는 data-contract 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-292
+    status: data-constraint
+    evidence: CMN-FR-004 데이터 범위를 관리해야 한다. 요구는 data-contract 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-293
+    status: data-constraint
+    evidence: CMN-FR-004 처리 권한을 관리해야 한다. 요구는 data-contract 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-294
+    status: non-functional
+    evidence: CMN-FR-004 데이터 범위와 처리 권한은 지정된 업무조직·업무영역·기간 안에서만 유효해야 한다. 요구는 architecture-runtime 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-298
+    status: out-of-scope
+    evidence: CMN-FR-004 역할 자체를 정의하지 않는다. 요구는 out-of-scope 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-300
+    status: out-of-scope
+    evidence: CMN-FR-004 담당 업무의 실제 확인 처리를 수행하지 않는다. 요구는 out-of-scope 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-301
+    status: out-of-scope
+    evidence: CMN-FR-004 담당 업무의 실제 인증 처리를 수행하지 않는다. 요구는 out-of-scope 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-302
+    status: out-of-scope
+    evidence: CMN-FR-004 담당 업무의 실제 승인 처리를 수행하지 않는다. 요구는 out-of-scope 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-306
+    status: out-of-scope
+    evidence: CMN-FR-004 이 기능에서 물리 삭제 기능을 새로 추가하지 않는다. 요구는 out-of-scope 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-311
+    status: non-functional
+    evidence: CMN-FR-004 데이터 범위와 처리 권한은 지정된 업무조직·업무영역·기간 안에서만 유효하다. 요구는 architecture-runtime 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-314
+    status: non-functional
+    evidence: CMN-FR-004 서로 다른 업무조직 또는 담당 업무영역의 기간은 각 기능의 기존 범위 안에서 독립적으로 관리할 수 있어야 한 요구는 api-contract 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-325
+    status: data-constraint
+    evidence: CMN-FR-009 데이터 범위 유형에는 본인, 소속학과, 단과대학, 담당업무, 전체를 포함해야 한다. 요구는 data-contract 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-334
+    status: out-of-scope
+    evidence: CMN-FR-009 화면별 행위 권한을 변경하지 않는다. 요구는 out-of-scope 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-335
+    status: out-of-scope
+    evidence: CMN-FR-009 사용자의 실제 소속조직을 변경하지 않는다. 요구는 out-of-scope 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-336
+    status: out-of-scope
+    evidence: CMN-FR-009 사용자의 실제 담당업무를 변경하지 않는다. 요구는 out-of-scope 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-337
+    status: out-of-scope
+    evidence: CMN-FR-009 역할 자체를 정의하거나 변경하지 않는다. 요구는 out-of-scope 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-338
+    status: out-of-scope
+    evidence: CMN-FR-009 전체 권한 매트릭스를 변경하지 않는다. 요구는 out-of-scope 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-339
+    status: out-of-scope
+    evidence: CMN-FR-009 대상 데이터의 인증상태를 생성하지 않는다. 요구는 out-of-scope 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-340
+    status: out-of-scope
+    evidence: CMN-FR-009 대상 데이터의 인증상태를 변경하지 않는다. 요구는 out-of-scope 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-341
+    status: out-of-scope
+    evidence: CMN-FR-009 대상 데이터의 인증상태를 승인하지 않는다. 요구는 out-of-scope 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-343
+    status: non-functional
+    evidence: CMN-FR-009 기존 역할별 기능 권한 판정 결과를 먼저 사용해야 한다. 요구는 architecture-runtime 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-344
+    status: non-functional
+    evidence: CMN-FR-009 역할별 기능 권한을 충족한 이후 데이터 범위를 판정해야 한다. 요구는 architecture-runtime 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-345
+    status: non-functional
+    evidence: CMN-FR-009 이후 기간 조건을 판정해야 한다. 요구는 api-contract 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.
+  - canonical_id: REQ-346
+    status: non-functional
+    evidence: CMN-FR-009 이후 대상 데이터의 인증상태를 판정해야 한다. 요구는 api-contract 산출물이 소유하며 신규 HTTP operation으로 직접 노출하지 않는다.

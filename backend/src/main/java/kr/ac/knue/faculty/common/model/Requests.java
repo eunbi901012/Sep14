@@ -22,4 +22,7 @@ public final class Requests {
     public record BatchExecutionRequest(String batchId, Map<String, Object> executionParameters, String actionReason) {}
     public record BatchActionRequest(Map<String, Object> executionParameters, String actionReason) {}
     public record BatchReprocessRequest(String originalExecutionId, String failedTargetId, String reprocessReason) {}
+    public record PositionAssignmentRequest(String positionCode, String userId, String organizationCode, String validFrom, String validTo, String targetCertificationStatus) {}
+    public record BusinessOwnerAssignmentRequest(String businessOrganizationCode, String userId, String workArea, String assignedFrom, String assignedTo, String dataScope, String processPermission, String requestedBaseDate) {}
+    public record DataScopeRuleRequest(String dataScopeType, String organizationCode, String workArea, Map<String, Object> condition) {}
 }

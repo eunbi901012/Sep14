@@ -3,6 +3,7 @@ package kr.ac.knue.faculty.common.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -38,7 +39,7 @@ public class AdminService {
     public Map<String, Object> params(int page, int size, String keyword, String filter) {
         Map<String, Object> params = new HashMap<>();
         int safePage = Math.max(page, 0);
-        int safeSize = Math.min(Math.max(size, 1), 100);
+        int safeSize = validatePageSize(size);
         String value = keyword != null && !keyword.isBlank() ? keyword : filter;
         params.put("page", safePage);
         params.put("size", safeSize);
@@ -369,6 +370,136 @@ public class AdminService {
         return page(mapper.listBatchReprocessResults(p), mapper.countBatchReprocessResults(p), page, size);
     }
 
+    public Map<String, Object> listPositions(int page, int size, String keyword, String baseDate) {
+        Map<String, Object> p = params(page, size, keyword, null);
+        if (baseDate != null && !baseDate.isBlank()) p.put("baseDate", LocalDate.parse(baseDate));
+        return page(mapper.listPositions(p), mapper.countPositions(p), page, size);
+    }
+
+    public Map<String, Object> getEffectivePositions(String baseDate) {
+        require(baseDate, "baseDate");
+        return Map.of("items", mapper.effectivePositions(LocalDate.parse(baseDate)));
+    }
+
+    public byte[] exportPositions(String keyword) {
+        Map<String, Object> p = params(0, 100, keyword, null);
+        StringBuilder out = new StringBuilder("positionAssignmentId,positionCode,userId,organizationCode,validFrom,validTo\n");
+        for (Map<String, Object> row : mapper.listPositions(p)) {
+            out.append(row.get("positionAssignmentId")).append(',')
+                .append(row.get("positionCode")).append(',')
+                .append(row.get("userId")).append(',')
+                .append(row.get("organizationCode")).append(',')
+                .append(row.get("validFrom")).append(',')
+                .append(row.get("validTo")).append('\n');
+        }
+        return out.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    @Transactional
+    public Map<String, Object> createPositionAssignment(Requests.PositionAssignmentRequest r) {
+        validatePositionAssignment(r);
+        LocalDate from = LocalDate.parse(r.validFrom());
+        LocalDate to = LocalDate.parse(r.validTo());
+        rejectIfPositionOverlaps("", r.positionCode(), r.userId(), r.organizationCode(), from, to);
+        String id = nextId("POS");
+        mapper.insertPositionAssignment(id, r.positionCode(), r.userId(), r.organizationCode(), from, to);
+        return mapper.findPositionAssignment(id);
+    }
+
+    @Transactional
+    public Map<String, Object> updatePositionAssignment(String id, Requests.PositionAssignmentRequest r) {
+        require(id, "positionAssignmentId");
+        validatePositionAssignment(r);
+        LocalDate from = LocalDate.parse(r.validFrom());
+        LocalDate to = LocalDate.parse(r.validTo());
+        rejectIfPositionOverlaps(id, r.positionCode(), r.userId(), r.organizationCode(), from, to);
+        if (mapper.updatePositionAssignment(id, r.positionCode(), r.userId(), r.organizationCode(), from, to) == 0) notFound("보직 지정");
+        return mapper.findPositionAssignment(id);
+    }
+
+    public Map<String, Object> listBusinessOwners(int page, int size, String keyword, String baseDate) {
+        Map<String, Object> p = params(page, size, keyword, null);
+        if (baseDate != null && !baseDate.isBlank()) p.put("baseDate", LocalDate.parse(baseDate));
+        return page(mapper.listBusinessOwners(p), mapper.countBusinessOwners(p), page, size);
+    }
+
+    public byte[] exportBusinessOwners(String keyword) {
+        Map<String, Object> p = params(0, 100, keyword, null);
+        StringBuilder out = new StringBuilder("businessOwnerAssignmentId,businessOrganizationCode,userId,workArea,assignedFrom,assignedTo,dataScope,processPermission\n");
+        for (Map<String, Object> row : mapper.listBusinessOwners(p)) {
+            out.append(row.get("businessOwnerAssignmentId")).append(',')
+                .append(row.get("businessOrganizationCode")).append(',')
+                .append(row.get("userId")).append(',')
+                .append(row.get("workArea")).append(',')
+                .append(row.get("assignedFrom")).append(',')
+                .append(row.get("assignedTo")).append(',')
+                .append(row.get("dataScope")).append(',')
+                .append(row.get("processPermission")).append('\n');
+        }
+        return out.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    @Transactional
+    public Map<String, Object> createBusinessOwnerAssignment(Requests.BusinessOwnerAssignmentRequest r) {
+        validateBusinessOwnerAssignment(r);
+        LocalDate from = LocalDate.parse(r.assignedFrom());
+        LocalDate to = LocalDate.parse(r.assignedTo());
+        rejectIfBusinessOwnerOverlaps("", r.businessOrganizationCode(), r.userId(), r.workArea(), from, to);
+        String id = nextId("BOA");
+        mapper.insertBusinessOwnerAssignment(id, r.businessOrganizationCode(), r.userId(), r.workArea(), from, to, r.dataScope(), r.processPermission());
+        return mapper.findBusinessOwnerAssignment(id);
+    }
+
+    @Transactional
+    public Map<String, Object> updateBusinessOwnerAssignment(String id, Requests.BusinessOwnerAssignmentRequest r) {
+        require(id, "businessOwnerAssignmentId");
+        validateBusinessOwnerAssignment(r);
+        LocalDate from = LocalDate.parse(r.assignedFrom());
+        LocalDate to = LocalDate.parse(r.assignedTo());
+        rejectIfBusinessOwnerOverlaps(id, r.businessOrganizationCode(), r.userId(), r.workArea(), from, to);
+        if (mapper.updateBusinessOwnerAssignment(id, r.businessOrganizationCode(), r.userId(), r.workArea(), from, to, r.dataScope(), r.processPermission()) == 0) notFound("업무담당자 지정");
+        return mapper.findBusinessOwnerAssignment(id);
+    }
+
+    public Map<String, Object> listDataScopes(int page, int size, String keyword) {
+        Map<String, Object> p = params(page, size, keyword, null);
+        return page(mapper.listDataScopes(p), mapper.countDataScopes(p), page, size);
+    }
+
+    public byte[] exportDataScopes(String keyword) {
+        Map<String, Object> p = params(0, 100, keyword, null);
+        StringBuilder out = new StringBuilder("roleCode,roleName,dataScopeType,organizationCode,organizationName,workArea,conditionJson\n");
+        for (Map<String, Object> row : mapper.listDataScopes(p)) {
+            out.append(row.get("roleCode")).append(',')
+                .append(row.get("roleName")).append(',')
+                .append(row.get("dataScopeType")).append(',')
+                .append(value(row.get("organizationCode"), "")).append(',')
+                .append(value(row.get("organizationName"), "")).append(',')
+                .append(value(row.get("workArea"), "")).append(',')
+                .append(value(row.get("conditionJson"), ""))
+                .append('\n');
+        }
+        return out.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    @Transactional
+    public Map<String, Object> saveDataScopeRule(String roleCode, Requests.DataScopeRuleRequest r) {
+        require(roleCode, "roleCode");
+        require(r.dataScopeType(), "dataScopeType");
+        validateDataScopeType(r.dataScopeType());
+        validateRoleDataScopeTarget(roleCode, r);
+        String conditionJson = json(r.condition());
+        int updated = mapper.updateDataScopeRule(roleCode, r.dataScopeType(), r.organizationCode(), r.workArea(), conditionJson);
+        if (updated == 0) mapper.insertDataScopeRule(roleCode, r.dataScopeType(), r.organizationCode(), r.workArea(), conditionJson);
+        Map<String, Object> data = new HashMap<>();
+        data.put("roleCode", roleCode);
+        data.put("dataScopeType", r.dataScopeType());
+        data.put("organizationCode", r.organizationCode());
+        data.put("workArea", r.workArea());
+        data.put("conditionJson", conditionJson);
+        return data;
+    }
+
     private Map<String, Object> userRoleResponse(String id, String userId, String roleCode, String source, String approverId, String from, String to) {
         Map<String, Object> data = new HashMap<>();
         data.put("assignmentId", id); data.put("userId", userId); data.put("roleCode", roleCode); data.put("assignmentSource", source); data.put("approverId", approverId); data.put("validFrom", from); data.put("validTo", to);
@@ -388,8 +519,15 @@ public class AdminService {
     private Map<String, Object> detailCodeResponse(String groupId, Requests.DetailCodeRequest r) {
         return Map.of("groupId", groupId, "codeValue", r.codeValue(), "codeName", r.codeName(), "parentCodeValue", value(r.parentCodeValue(), ""), "sortOrder", r.sortOrder() == null ? 0 : r.sortOrder(), "additionalAttributes", value(r.additionalAttributes(), "{}"), "useYn", value(r.useYn(), "Y"));
     }
+    private Map<String, Object> positionResponse(String id, Requests.PositionAssignmentRequest r) {
+        return Map.of("positionAssignmentId", id, "positionCode", r.positionCode(), "userId", r.userId(), "organizationCode", r.organizationCode(), "validFrom", r.validFrom(), "validTo", r.validTo());
+    }
+    private Map<String, Object> businessOwnerResponse(String id, Requests.BusinessOwnerAssignmentRequest r) {
+        return Map.of("businessOwnerAssignmentId", id, "businessOrganizationCode", r.businessOrganizationCode(), "userId", r.userId(), "workArea", r.workArea(), "assignedFrom", r.assignedFrom(), "assignedTo", r.assignedTo(), "dataScope", r.dataScope(), "processPermission", r.processPermission());
+    }
 
     private String value(String value, String fallback) { return value == null || value.isBlank() ? fallback : value; }
+    private String value(Object value, String fallback) { return value == null || value.toString().isBlank() ? fallback : value.toString(); }
     private LocalDate parseNullableDate(String value) { return value == null || value.isBlank() ? null : LocalDate.parse(value); }
     private Map<String, Object> toCommonSettingContract(Map<String, Object> row) {
         Map<String, Object> data = new LinkedHashMap<>(row);
@@ -435,6 +573,46 @@ public class AdminService {
         require(schedule, "schedule");
         require(ownerUserId, "ownerUserId");
         if (maxExecutionSeconds == null || maxExecutionSeconds <= 0) throw bad("maxExecutionSeconds는 1 이상이어야 합니다.");
+    }
+    private int validatePageSize(int size) {
+        if (size == 10 || size == 20 || size == 50 || size == 100) return size;
+        throw bad("목록 표시 건수는 10, 20, 50, 100 중 하나여야 합니다.");
+    }
+    private void validatePositionAssignment(Requests.PositionAssignmentRequest r) {
+        require(r.positionCode(), "positionCode"); require(r.userId(), "userId"); require(r.organizationCode(), "organizationCode"); require(r.validFrom(), "validFrom"); require(r.validTo(), "validTo");
+        LocalDate from = LocalDate.parse(r.validFrom()); LocalDate to = LocalDate.parse(r.validTo());
+        if (from.isAfter(to)) throw bad("validFrom은 validTo보다 늦을 수 없습니다.");
+        if ("UNCERTIFIED".equals(r.targetCertificationStatus())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "대상 데이터 인증상태가 미인증이면 처리할 수 없습니다.", "CERTIFICATION_STATUS");
+        }
+    }
+    private void rejectIfPositionOverlaps(String id, String positionCode, String userId, String organizationCode, LocalDate from, LocalDate to) {
+        if (mapper.countOverlappingPositionAssignments(id, positionCode, userId, organizationCode, from, to) > 0) throw bad("동일 보직코드·대상 사용자·소속조직의 유효기간이 겹칩니다.");
+    }
+    private void validateBusinessOwnerAssignment(Requests.BusinessOwnerAssignmentRequest r) {
+        require(r.businessOrganizationCode(), "businessOrganizationCode"); require(r.userId(), "userId"); require(r.workArea(), "workArea"); require(r.assignedFrom(), "assignedFrom"); require(r.assignedTo(), "assignedTo"); require(r.dataScope(), "dataScope"); require(r.processPermission(), "processPermission");
+        LocalDate from = LocalDate.parse(r.assignedFrom()); LocalDate to = LocalDate.parse(r.assignedTo());
+        if (from.isAfter(to)) throw bad("assignedFrom은 assignedTo보다 늦을 수 없습니다.");
+        if (r.requestedBaseDate() != null && !r.requestedBaseDate().isBlank()) {
+            LocalDate baseDate = LocalDate.parse(r.requestedBaseDate());
+            if (baseDate.isBefore(from) || baseDate.isAfter(to)) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "요청 기준일이 지정기간 밖입니다.", "PERIOD");
+            }
+        }
+        validateDataScopeType(r.dataScope());
+        if (!List.of("READ", "WRITE", "APPROVE", "EXPORT").contains(r.processPermission())) throw bad("processPermission 값이 올바르지 않습니다.");
+    }
+    private void rejectIfBusinessOwnerOverlaps(String id, String organizationCode, String userId, String workArea, LocalDate from, LocalDate to) {
+        if (mapper.countOverlappingBusinessOwnerAssignments(id, organizationCode, userId, workArea, from, to) > 0) throw bad("동일 업무조직·담당자·담당 업무영역의 지정기간이 겹칩니다.");
+    }
+    private void validateDataScopeType(String dataScopeType) {
+        if (!List.of("SELF", "DEPARTMENT", "COLLEGE", "BUSINESS_OWNER", "ALL").contains(dataScopeType)) throw bad("dataScopeType 값이 올바르지 않습니다.");
+    }
+    private void validateRoleDataScopeTarget(String roleCode, Requests.DataScopeRuleRequest r) {
+        if (mapper.countActiveRole(roleCode) == 0) notFound("역할");
+        if (r.organizationCode() != null && !r.organizationCode().isBlank() && mapper.countActiveOrganization(r.organizationCode()) == 0) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "데이터 범위 밖 조직코드는 저장할 수 없습니다.", "DATA_SCOPE");
+        }
     }
     private String currentUserId(HttpServletRequest req) {
         return String.valueOf(authService.requireSession(req).get("userId"));
